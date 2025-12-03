@@ -8,7 +8,6 @@ import os
 
 @dataclass
 class CurrencyRate:
-    """Currency rate data class"""
     currency_from: str
     currency_to: str
     rate: float
@@ -20,7 +19,6 @@ class CurrencyRate:
 
 @dataclass
 class CryptoCurrency:
-    """Cryptocurrency data class"""
     id: str
     symbol: str
     name: str
@@ -35,8 +33,6 @@ class CryptoCurrency:
     image: Optional[str] = None
 
 class CoingeckoClient:
-    """Client for cryptocurrency monitoring using CoinGecko API"""
-
     def __init__(self, api_key: str = None):
         self.api_url = "https://api.coingecko.com/api/v3"
         self.api_key = api_key or os.getenv('COINGECKO_API_KEY')
