@@ -52,7 +52,7 @@ def interactive_demo():
                 print("5. exit                 - Exit")
                 print("-"*50)
 
-                choice = input("\n🔧 Enter command number (1-9): ").strip()
+                choice = input("\n🔧 Enter command number (1-5): ").strip()
 
                 if choice == '1':
                     address = input("Enter collection address (starts with EQ): ").strip()
@@ -181,7 +181,7 @@ def interactive_demo():
                 elif choice == '4':
                     address = input("Enter NFT address (starts with EQ): ").strip()
                     if address.startswith('EQ'):
-                        print(f"\n📄 Getting NFT info for: {address[:20]}...")
+                        print(f"\n📄 Getting NFT info for: {address}")
                         result = plugin.getgems_client.get_nft_by_address(address)
 
                         if result.get('success'):
@@ -196,25 +196,25 @@ def interactive_demo():
                                 print(f"Description: {desc}")
 
                             if nft.get('ownerAddress'):
-                                print(f"Owner: {nft['ownerAddress'][:20]}...")
+                                print(f"Owner: {nft['ownerAddress']}")
 
                             if nft.get('collectionAddress'):
-                                print(f"Collection: {nft['collectionAddress'][:20]}...")
+                                print(f"Collection: {nft['collectionAddress']}")
 
                             sale = nft.get('sale', {})
-                            if sale.get('minBid'):
-                                price_nano = int(sale['minBid'])
+                            if sale.get('fullPrice'):
+                                price_nano = int(sale['fullPrice'])
                                 price_ton = price_nano / 1e9
                                 print(f"Price: {price_ton:.2f} {sale.get('currency', 'TON')}")
 
                             attributes = nft.get('attributes', [])
-                            print(f"Attributes: {len(attributes)}")
 
                             if attributes:
-                                print(f"Key Attributes:")
+                                print(f"Attributes:")
                                 for attr in attributes[:3]:
+                                    trait = attr.get('traitType', 'Unknown')
                                     value = attr.get('value', 'Unknown')
-                                    print(f"  - {value}")
+                                    print(f"  - {trait}: {value}")
                         else:
                             print(f"❌ Error: {result.get('error', 'Unknown error')}")
                     else:
