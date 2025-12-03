@@ -1,7 +1,8 @@
 import sys
 import time
+import os
 
-sys.path.append('/home/user/proj2/sidus-ai-core')
+sys.path.append(os.environ.get('SIDUS_AI_CORE_PATH'))
 import sidusai as sai
 from sidusai.plugins.ton.getgems import GetgemsPlugin
 

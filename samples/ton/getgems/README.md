@@ -23,5 +23,6 @@ To set up and run the example, use the following environment variables. They are
 proper connection to external suppliers/consumers.
 
 ```properties
-DEEPSEEK_API_KEY=xx-XXXXXXXXXXXXXXXXXXXXXXXXXX
+export SIDUS_AI_CORE_PATH="/home/user/prog/sidus-ai-core"
+export GETGEMS_API_KEY="API_KEY"
 ```
