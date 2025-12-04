@@ -33,7 +33,7 @@ def get_crypto_price_skill(context: Dict[str, Any]) -> CryptoCurrencyValue:
             result = {"error": "CoinMarketCap component not available"}
             return CryptoCurrencyValue(result)
 
-        print(f"💰 Getting price for {symbol.upper()} in {convert.upper()}")
+        print(f"💰 Getting price for {symbol.upper()} in {convert.upper()}...")
 
         api_result = coinmarketcap_component.get_crypto_price(symbol, convert)
 
@@ -50,7 +50,6 @@ def get_crypto_price_skill(context: Dict[str, Any]) -> CryptoCurrencyValue:
         }
 
         price = api_result.get('price', 0)
-        print(f"✅ {symbol.upper()} price: ${price:,.2f} {convert.upper()}")
         return CryptoCurrencyValue(result)
 
     except Exception as e:
@@ -340,19 +339,19 @@ def coinmarketcap_chat_skill(chat: ChatAgentValue) -> ChatAgentValue:
     try:
         if not chat.messages:
             chat.append_assistant(
-                "💰 **CoinMarketCap - Professional Crypto Data**\n\n"
+                "💰 CoinMarketCap - Professional Crypto Data\n\n"
                 "I provide real-time cryptocurrency data from CoinMarketCap API.\n\n"
-                "**Available Commands:**\n"
-                "• `price <symbol>` - Get cryptocurrency price (e.g., price BTC)\n"
-                "• `market [limit]` - Get top cryptocurrencies (e.g., market 10)\n"
-                "• `trending` - Get trending cryptocurrencies\n"
-                "• `convert <amount> <from> <to>` - Convert cryptocurrency (e.g., convert 1 BTC ETH)\n"
-                "• `history <symbol> [period]` - Get historical data (e.g., history BTC 30d)\n"
-                "• `info <symbol>` - Get cryptocurrency information\n"
-                "• `global` - Get global market metrics\n"
-                "• `search <query>` - Search for cryptocurrencies\n"
-                "• `help` - Show this help message\n\n"
-                "**Examples:**\n"
+                "Available Commands:\n"
+                "• price <symbol> - Get cryptocurrency price (e.g., price BTC)\n"
+                "• market [limit] - Get top cryptocurrencies (e.g., market 10)\n"
+                "• trending - Get trending cryptocurrencies\n"
+                "• convert <amount> <from> <to> - Convert cryptocurrency (e.g., convert 1 BTC ETH)\n"
+                "• history <symbol> [period] - Get historical data (e.g., history BTC 30d)\n"
+                "• info <symbol> - Get cryptocurrency information\n"
+                "• global - Get global market metrics\n"
+                "• search <query> - Search for cryptocurrencies\n"
+                "• help - Show this help message\n\n"
+                "Examples:\n"
                 "• price BTC\n"
                 "• market 20\n"
                 "• trending\n"
@@ -386,16 +385,16 @@ def coinmarketcap_chat_skill(chat: ChatAgentValue) -> ChatAgentValue:
                 crypto_data = data['data']
                 change_emoji = "📈" if crypto_data['percent_change_24h'] >= 0 else "📉"
                 response = [
-                    f"💰 **{symbol} Price**",
-                    f"**Name:** {crypto_data['name']}",
-                    f"**Price:** ${crypto_data['price']:,.2f} USD",
-                    f"**24h Change:** {change_emoji} {crypto_data['percent_change_24h']:+.2f}%",
-                    f"**1h Change:** {crypto_data['percent_change_1h']:+.2f}%",
-                    f"**7d Change:** {crypto_data['percent_change_7d']:+.2f}%",
-                    f"**Market Cap:** ${crypto_data['market_cap']:,.0f}",
-                    f"**24h Volume:** ${crypto_data['volume_24h']:,.0f}",
-                    f"**Circulating Supply:** {crypto_data['circulating_supply']:,.0f}",
-                    f"**Last Updated:** {datetime.fromisoformat(crypto_data['last_updated'].replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M:%S')}"
+                    f"💰 {symbol} Price",
+                    f"Name: {crypto_data['name']}",
+                    f"Price: ${crypto_data['price']:,.2f} USD",
+                    f"24h Change: {change_emoji} {crypto_data['percent_change_24h']:+.2f}%",
+                    f"1h Change: {crypto_data['percent_change_1h']:+.2f}%",
+                    f"7d Change: {crypto_data['percent_change_7d']:+.2f}%",
+                    f"Market Cap: ${crypto_data['market_cap']:,.0f}",
+                    f"24h Volume: ${crypto_data['volume_24h']:,.0f}",
+                    f"Circulating Supply: {crypto_data['circulating_supply']:,.0f}",
+                    f"Last Updated: {datetime.fromisoformat(crypto_data['last_updated'].replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M:%S')}"
                 ]
                 chat.append_assistant("\n".join(response))
             else:
@@ -422,15 +421,15 @@ def coinmarketcap_chat_skill(chat: ChatAgentValue) -> ChatAgentValue:
                 cryptos = data['cryptocurrencies']
 
                 response = [
-                    f"📈 **Top {len(cryptos)} Cryptocurrencies**",
-                    f"*Sorted by market cap*",
+                    f"📈 Top {len(cryptos)} Cryptocurrencies",
+                    f"Sorted by market cap",
                     ""
                 ]
 
                 for i, crypto in enumerate(cryptos[:5], 1):
                     change_emoji = "📈" if crypto['percent_change_24h'] >= 0 else "📉"
                     response.extend([
-                        f"**#{i} {crypto['name']} ({crypto['symbol']})**",
+                        f"#{i} {crypto['name']} ({crypto['symbol']})",
                         f"• Rank: #{crypto['cmc_rank']}",
                         f"• Price: ${crypto['price']:,.2f}",
                         f"• 24h Change: {change_emoji} {crypto['percent_change_24h']:+.2f}%",
@@ -457,14 +456,14 @@ def coinmarketcap_chat_skill(chat: ChatAgentValue) -> ChatAgentValue:
                 trending = data['trending_cryptos']
 
                 response = [
-                    f"🔥 **Trending Cryptocurrencies**",
-                    f"*Based on CoinMarketCap trending data*",
+                    f"🔥 Trending Cryptocurrencies",
+                    f"Based on CoinMarketCap trending data",
                     ""
                 ]
 
                 for i, crypto in enumerate(trending[:5], 1):
                     response.extend([
-                        f"**#{i} {crypto['name']} ({crypto['symbol']})**",
+                        f"#{i} {crypto['name']} ({crypto['symbol']})",
                         f"• Overall Rank: #{crypto['cmc_rank'] if crypto['cmc_rank'] > 0 else 'N/A'}",
                         f"• Trend Score: {crypto['trend_score']:.2f}",
                         ""
@@ -495,10 +494,10 @@ def coinmarketcap_chat_skill(chat: ChatAgentValue) -> ChatAgentValue:
                     if data.get('success'):
                         conversion = data['conversion']
                         response = [
-                            f"🔄 **Cryptocurrency Conversion**",
-                            f"**{amount:,.6f} {from_symbol} = {conversion['converted_amount']:.6f} {to_symbol}**",
-                            f"**Exchange Rate:** 1 {from_symbol} = {conversion['rate']:.6f} {to_symbol}",
-                            f"*Rate updated: {conversion['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}*"
+                            f"🔄 Cryptocurrency Conversion",
+                            f"{amount:,.6f} {from_symbol} = {conversion['converted_amount']:.6f} {to_symbol}",
+                            f"Exchange Rate: 1 {from_symbol} = {conversion['rate']:.6f} {to_symbol}",
+                            f"Rate updated: {conversion['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}"
                         ]
                         chat.append_assistant("\n".join(response))
                     else:
@@ -530,18 +529,18 @@ def coinmarketcap_chat_skill(chat: ChatAgentValue) -> ChatAgentValue:
                 if data.get('success'):
                     change_emoji = "📈" if data['change_percentage'] >= 0 else "📉"
                     response = [
-                        f"📊 **{symbol} - {time_period} History**",
-                        f"**Current Price:** ${data['current_price']:,.2f}",
-                        f"**Period Change:** {change_emoji} {data['change_percentage']:+.2f}%",
-                        f"**High:** ${data['max_price']:,.2f}",
-                        f"**Low:** ${data['min_price']:,.2f}",
-                        f"**Average:** ${data['avg_price']:,.2f}",
-                        f"**Data Points:** {data['data_points']}",
+                        f"📊 {symbol} - {time_period} History",
+                        f"Current Price: ${data['current_price']:,.2f}",
+                        f"Period Change: {change_emoji} {data['change_percentage']:+.2f}%",
+                        f"High: ${data['max_price']:,.2f}",
+                        f"Low: ${data['min_price']:,.2f}",
+                        f"Average: ${data['avg_price']:,.2f}",
+                        f"Data Points: {data['data_points']}",
                         ""
                     ]
 
                     if data.get('sample_data'):
-                        response.append("**Recent Prices:**")
+                        response.append("Recent Prices:")
                         for sample in data['sample_data']:
                             response.append(f"• Day {sample['day']}: ${sample['price']:,.2f}")
 
@@ -565,32 +564,32 @@ def coinmarketcap_chat_skill(chat: ChatAgentValue) -> ChatAgentValue:
                 info = data['info']
 
                 response = [
-                    f"📋 **{symbol} Information**",
-                    f"**Name:** {info['name']}",
-                    f"**Symbol:** {info['symbol']}",
-                    f"**Category:** {info.get('category', 'Cryptocurrency')}",
+                    f"📋 {symbol} Information",
+                    f"Name: {info['name']}",
+                    f"Symbol: {info['symbol']}",
+                    f"Category: {info.get('category', 'Cryptocurrency')}",
                     ""
                 ]
 
                 if info.get('description'):
                     desc = info['description'][:200] + "..." if len(info['description']) > 200 else info['description']
-                    response.append(f"**Description:** {desc}")
+                    response.append(f"Description: {desc}")
                     response.append("")
 
                 if info.get('urls'):
                     urls = info['urls']
                     if urls.get('website'):
-                        response.append(f"**Website:** {urls['website'][0] if urls['website'] else 'N/A'}")
+                        response.append(f"Website: {urls['website'][0] if urls['website'] else 'N/A'}")
                     if urls.get('twitter'):
-                        response.append(f"**Twitter:** {urls['twitter'][0] if urls['twitter'] else 'N/A'}")
+                        response.append(f"Twitter: {urls['twitter'][0] if urls['twitter'] else 'N/A'}")
                     response.append("")
 
                 if info.get('tags'):
                     tags = ', '.join(info['tags'][:5])
-                    response.append(f"**Tags:** {tags}")
+                    response.append(f"Tags: {tags}")
 
                 if info.get('date_added'):
-                    response.append(f"**Date Added:** {info['date_added']}")
+                    response.append(f"Date Added: {info['date_added']}")
 
                 chat.append_assistant("\n".join(response))
             else:
@@ -613,13 +612,13 @@ def coinmarketcap_chat_skill(chat: ChatAgentValue) -> ChatAgentValue:
                 other_dominance = 100 - total_share
 
                 response = [
-                    f"🌍 **Global Cryptocurrency Market**",
-                    f"**Total Market Cap:** ${metrics['total_market_cap']:,.0f}",
-                    f"**24h Volume:** ${metrics['total_volume_24h']:,.0f}",
-                    f"**Active Cryptocurrencies:** {metrics['active_cryptocurrencies']:,}",
-                    f"**Total Cryptocurrencies:** {metrics['total_cryptocurrencies']:,}",
+                    f"🌍 Global Cryptocurrency Market",
+                    f"Total Market Cap: ${metrics['total_market_cap']:,.0f}",
+                    f"24h Volume: ${metrics['total_volume_24h']:,.0f}",
+                    f"Active Cryptocurrencies: {metrics['active_cryptocurrencies']:,}",
+                    f"Total Cryptocurrencies: {metrics['total_cryptocurrencies']:,}",
                     "",
-                    f"**Market Dominance:**",
+                    f"Market Dominance:",
                     f"• Bitcoin: {btc_dominance:.1f}%",
                     f"• Ethereum: {eth_dominance:.1f}%",
                     f"• Others: {other_dominance:.1f}%"
@@ -651,21 +650,21 @@ def coinmarketcap_chat_skill(chat: ChatAgentValue) -> ChatAgentValue:
 
                 if search_results:
                     response = [
-                        f"🔍 **Search Results for '{query}'**",
+                        f"🔍 Search Results for '{query}'",
                         f"Found: {len(search_results)} cryptocurrencies",
                         ""
                     ]
 
                     for i, result in enumerate(search_results[:5], 1):
                         response.extend([
-                            f"**#{i} {result.get('name', 'Unknown')} ({result.get('symbol', '').upper()})**",
+                            f"#{i} {result.get('name', 'Unknown')} ({result.get('symbol', '').upper()})",
                             f"• ID: {result.get('id', 'N/A')}",
                             f"• Slug: {result.get('slug', 'N/A')}",
                             ""
                         ])
 
-                    response.append("💡 Use `price <symbol>` to get current price")
-                    response.append("💡 Use `info <symbol>` to get detailed information")
+                    response.append("💡 Use price <symbol> to get current price")
+                    response.append("💡 Use info <symbol> to get detailed information")
                     chat.append_assistant("\n".join(response))
                 else:
                     chat.append_assistant(f"🔍 No cryptocurrencies found for '{query}'")
@@ -675,18 +674,18 @@ def coinmarketcap_chat_skill(chat: ChatAgentValue) -> ChatAgentValue:
 
         elif last_message == 'help':
             chat.append_assistant(
-                "💰 **CoinMarketCap - Professional Crypto Data**\n\n"
-                "**Available Commands:**\n"
-                "• `price <symbol>` - Get cryptocurrency price\n"
-                "• `market [limit]` - Get top cryptocurrencies\n"
-                "• `trending` - Get trending cryptocurrencies\n"
-                "• `convert <amount> <from> <to>` - Convert cryptocurrency\n"
-                "• `history <symbol> [period]` - Get historical data\n"
-                "• `info <symbol>` - Get cryptocurrency information\n"
-                "• `global` - Get global market metrics\n"
-                "• `search <query>` - Search for cryptocurrencies\n"
-                "• `help` - Show this help message\n\n"
-                "**Examples:**\n"
+                "💰 CoinMarketCap - Professional Crypto Data\n\n"
+                "Available Commands:\n"
+                "• price <symbol> - Get cryptocurrency price\n"
+                "• market [limit] - Get top cryptocurrencies\n"
+                "• trending - Get trending cryptocurrencies\n"
+                "• convert <amount> <from> <to> - Convert cryptocurrency\n"
+                "• history <symbol> [period] - Get historical data\n"
+                "• info <symbol> - Get cryptocurrency information\n"
+                "• global - Get global market metrics\n"
+                "• search <query> - Search for cryptocurrencies\n"
+                "• help - Show this help message\n\n"
+                "Examples:\n"
                 "• price BTC\n"
                 "• market 20\n"
                 "• trending\n"
@@ -700,17 +699,17 @@ def coinmarketcap_chat_skill(chat: ChatAgentValue) -> ChatAgentValue:
         else:
             chat.append_assistant(
                 "🤔 I didn't understand that command.\n\n"
-                "**Available commands:**\n"
-                "• `price <symbol>` - Get cryptocurrency price\n"
-                "• `market [limit]` - Get market data\n"
-                "• `trending` - Get trending cryptos\n"
-                "• `convert <amount> <from> <to>` - Convert cryptocurrency\n"
-                "• `history <symbol> [period]` - Get historical data\n"
-                "• `info <symbol>` - Get cryptocurrency info\n"
-                "• `global` - Get global market metrics\n"
-                "• `search <query>` - Search cryptos\n"
-                "• `help` - Show help\n\n"
-                "Type `help` for more information."
+                "Available commands:\n"
+                "• price <symbol> - Get cryptocurrency price\n"
+                "• market [limit] - Get market data\n"
+                "• trending - Get trending cryptos\n"
+                "• convert <amount> <from> <to> - Convert cryptocurrency\n"
+                "• history <symbol> [period] - Get historical data\n"
+                "• info <symbol> - Get cryptocurrency info\n"
+                "• global - Get global market metrics\n"
+                "• search <query> - Search cryptos\n"
+                "• help - Show help\n\n"
+                "Type help for more information."
             )
 
     except Exception as e:
