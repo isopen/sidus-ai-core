@@ -14,21 +14,17 @@ async def main():
     print("Testing Cocoon Monitoring Plugin...")
     print("-" * 50)
 
-    print("1. Checking worker status:")
-    status = await skills.skill_check_worker_running()
-    print(json.dumps(status, indent=2))
+    print("1. Checking worker availability:")
+    availability = await skills.skill_check_worker_available()
+    print(json.dumps(availability, indent=2))
 
-    print("\n2. Getting detailed statistics:")
+    print("\n2. Getting detailed JSON statistics:")
     stats = await skills.skill_get_detailed_stats()
     print(json.dumps(stats, indent=2))
 
-    print("\n3. Getting health report:")
-    health = await skills.skill_get_health_report()
-    print(json.dumps(health, indent=2))
-
-    print("\n4. Service health check:")
-    service_health = await skills.skill_check_service_health()
-    print(json.dumps(service_health, indent=2))
+    print("\n3. Getting full status report:")
+    full_report = await skills.skill_get_full_status_report()
+    print(json.dumps(full_report, indent=2))
 
 if __name__ == "__main__":
     asyncio.run(main())
