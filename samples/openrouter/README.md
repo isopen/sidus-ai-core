@@ -12,7 +12,7 @@ If needed, you can add your own agent skills to prepare messages or select the o
 
 ### Dependencies
 
-The default kernel does not contain the dependencies required for plugins, as it is lightweight. 
+The default kernel does not contain the dependencies required for plugins, as it is lightweight.
 For plugins to work, you need to install dependencies in your project yourself.
 
 ```requirements
@@ -27,9 +27,10 @@ pip install requests
 
 ### Environments
 
-To set up and run the example, use the following environment variables. They are necessary for 
+To set up and run the example, use the following environment variables. They are necessary for
 proper connection to external suppliers/consumers.
 
 ```properties
-DEEPSEEK_API_KEY=xx-XXXXXXXXXXXXXXXXXXXXXXXXXX
+export SIDUS_AI_CORE_PATH="SIDUS_AI_CORE_PATH"
+export OPENROUTER_API_KEY="OPENROUTER_API_KEY"
 ```
