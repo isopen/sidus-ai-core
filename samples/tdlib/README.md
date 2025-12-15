@@ -8,5 +8,8 @@ To set up and run the example, use the following environment variables. They are
 proper connection to external suppliers/consumers.
 
 ```properties
-SIDUS_AI_CORE_PATH="SIDUS_AI_CORE_PATH"
+export SIDUS_AI_CORE_PATH="SIDUS_AI_CORE_PATH"
+export TDLIB_API_ID="API_ID"
+export TDLIB_API_HASH="API_HASH"
+export TDLIB_PATH="TDLIB_PATH"
 ```

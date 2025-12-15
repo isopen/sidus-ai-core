@@ -1,10 +1,7 @@
 import os
 import sys
-
-sys.path.append(os.environ.get('SIDUS_AI_CORE_PATH'))
-
-import sys
 import time
+sys.path.append(os.environ.get('SIDUS_AI_CORE_PATH'))
 from sidusai.plugins.tdlib import TDLibAiAgent
 from ctypes.util import find_library
 
@@ -12,9 +9,9 @@ def main():
     print("TDLib Assistent")
     print("="*60)
 
-    API_ID = 94575
-    API_HASH = "a3406de8d171bb422bb6ddf3bbd800e2"
-    TDLib_DIRECTORY = os.environ.get('TDLIB_PATH')
+    API_ID = os.environ.get('TDLIB_API_ID') #94575
+    API_HASH = os.environ.get('TDLIB_API_HASH') #"a3406de8d171bb422bb6ddf3bbd800e2"
+    TDLIB_PATH = os.environ.get('TDLIB_PATH') #find_library("tdjson")
 
     print(f"Using API ID: {API_ID}")
 
@@ -23,8 +20,8 @@ def main():
             api_id=API_ID,
             api_hash=API_HASH,
             system_prompt="Assistant",
-            database_directory="./tdlib_test",
-            tdlib_directory=find_library("tdjson")
+            database_directory="./tdlib",
+            tdlib_directory=TDLIB_PATH
         )
 
         print(f"\n✓ Agent created")
