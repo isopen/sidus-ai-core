@@ -1,34 +1,31 @@
-import aiohttp
-import asyncio
+import requests
 from datetime import datetime
 from typing import Dict, Any
-import logging
 
-logger = logging.getLogger(__name__)
-
-class CocoonMonitoringAgent:
+class CocoonMonitoringComponent:
     def __init__(self, host: str = "localhost", port: int = 12000):
         self.host = host
         self.port = port
         self.base_url = f"http://{host}:{port}"
-        self.timeout = aiohttp.ClientTimeout(total=10)
+        self.timeout = 10
+        self.session = requests.Session()
 
-    async def get_json_stats(self) -> Dict[str, Any]:
+    def get_json_stats(self) -> Dict[str, Any]:
         endpoint = f"{self.base_url}/jsonstats"
         try:
-            async with aiohttp.ClientSession(timeout=self.timeout) as session:
-                async with session.get(endpoint) as response:
-                    if response.status == 200:
-                        return await response.json()
-                    else:
-                        return {
-                            "error": f"HTTP {response.status}",
-                            "status_code": response.status,
-                            "endpoint": endpoint,
-                            "timestamp": datetime.now().isoformat()
-                        }
-        except aiohttp.ClientError as e:
-            logger.error(f"HTTP error accessing {endpoint}: {e}")
+            response = self.session.get(endpoint, timeout=self.timeout)
+            if response.status_code == 200:
+                return response.json()
+            else:
+                print(f"Error accessing {endpoint}: HTTP {response.status_code}")
+                return {
+                    "error": f"HTTP {response.status_code}",
+                    "status_code": response.status_code,
+                    "endpoint": endpoint,
+                    "timestamp": datetime.now().isoformat()
+                }
+        except requests.exceptions.RequestException as e:
+            print(f"HTTP error accessing {endpoint}: {e}")
             return {
                 "error": f"Connection failed: {str(e)}",
                 "endpoint": endpoint,
@@ -36,7 +33,7 @@ class CocoonMonitoringAgent:
                 "status": "connection_error"
             }
         except Exception as e:
-            logger.error(f"Unexpected error accessing {endpoint}: {e}")
+            print(f"Unexpected error accessing {endpoint}: {e}")
             return {
                 "error": f"Unexpected error: {str(e)}",
                 "endpoint": endpoint,
@@ -44,22 +41,19 @@ class CocoonMonitoringAgent:
                 "status": "error"
             }
 
-    async def check_worker_status(self) -> Dict[str, Any]:
+    def check_worker_status(self) -> Dict[str, Any]:
         endpoint = f"{self.base_url}/stats"
         try:
-            async with aiohttp.ClientSession(timeout=self.timeout) as session:
-                async with session.get(endpoint) as response:
-                    response_text = await response.text()
-
-                    return {
-                        "available": response.status == 200,
-                        "http_status": response.status,
-                        "raw_response": response_text.strip(),
-                        "endpoint": endpoint,
-                        "timestamp": datetime.now().isoformat()
-                    }
-        except aiohttp.ClientError as e:
-            logger.error(f"HTTP error accessing {endpoint}: {e}")
+            response = self.session.get(endpoint, timeout=self.timeout)
+            return {
+                "available": response.status_code == 200,
+                "http_status": response.status_code,
+                "raw_response": response.text.strip(),
+                "endpoint": endpoint,
+                "timestamp": datetime.now().isoformat()
+            }
+        except requests.exceptions.RequestException as e:
+            print(f"HTTP error accessing {endpoint}: {e}")
             return {
                 "available": False,
                 "error": f"Connection failed: {str(e)}",
@@ -67,7 +61,7 @@ class CocoonMonitoringAgent:
                 "timestamp": datetime.now().isoformat()
             }
         except Exception as e:
-            logger.error(f"Unexpected error accessing {endpoint}: {e}")
+            print(f"Unexpected error accessing {endpoint}: {e}")
             return {
                 "available": False,
                 "error": f"Unexpected error: {str(e)}",
@@ -75,11 +69,9 @@ class CocoonMonitoringAgent:
                 "timestamp": datetime.now().isoformat()
             }
 
-    async def get_comprehensive_stats(self) -> Dict[str, Any]:
-        json_stats, worker_status = await asyncio.gather(
-            self.get_json_stats(),
-            self.check_worker_status()
-        )
+    def get_comprehensive_stats(self) -> Dict[str, Any]:
+        json_stats = self.get_json_stats()
+        worker_status = self.check_worker_status()
 
         return {
             "detailed_stats": json_stats,

@@ -1,30 +1,42 @@
-import asyncio
-import json
-import sys
 import os
-
+import sys
 sys.path.append(os.environ.get('SIDUS_AI_CORE_PATH'))
-from sidusai.plugins.cocoon import CocoonMonitoringAgent
-from sidusai.plugins.cocoon.skills import CocoonMonitoringSkills
+import sidusai.plugins.cocoon as cocoon
+from sidusai.plugins.cocoon.values import CocoonStatsValue, CocoonHealthValue, CocoonReportValue
 
-async def main():
-    agent = CocoonMonitoringAgent()
-    skills = CocoonMonitoringSkills(agent)
+host = os.environ.get('COCOON_HOST', 'localhost')
+port = int(os.environ.get('COCOON_PORT', '12000'))
 
-    print("Testing Cocoon Monitoring Plugin...")
-    print("-" * 50)
+def accept_stats(value: CocoonStatsValue):
+    print(f'📊 Cocoon stats received: {value}')
 
-    print("1. Checking worker availability:")
-    availability = await skills.skill_check_worker_available()
-    print(json.dumps(availability, indent=2))
+def accept_health(value: CocoonHealthValue):
+    print(f'🩺 Cocoon health received: {value}')
 
-    print("\n2. Getting detailed JSON statistics:")
-    stats = await skills.skill_get_detailed_stats()
-    print(json.dumps(stats, indent=2))
+def accept_report(value: CocoonReportValue):
+    print(f'📋 Cocoon report received: {value}')
 
-    print("\n3. Getting full status report:")
-    full_report = await skills.skill_get_full_status_report()
-    print(json.dumps(full_report, indent=2))
+if __name__ == '__main__':
+    print("🤖 Creating Cocoon monitoring agent...")
+    agent = cocoon.CocoonMonitoringAgent(
+        host=host,
+        port=port,
+    )
 
-if __name__ == "__main__":
-    asyncio.run(main())
+    print("🔧 Building application...")
+    agent.application_build()
+
+    print("📊 Getting Cocoon statistics...")
+    agent.get_stats(
+        handler=accept_stats
+    )
+
+    print("🩺 Checking Cocoon health...")
+    agent.check_health(
+        handler=accept_health
+    )
+
+    print("📋 Getting Cocoon report...")
+    agent.get_report(
+        handler=accept_report
+    )

@@ -24,4 +24,6 @@ proper connection to external suppliers/consumers.
 
 ```properties
 SIDUS_AI_CORE_PATH="SIDUS_AI_CORE_PATH"
+COCOON_HOST="COCOON_HOST"
+COCOON_PORT="COCOON_PORT"
 ```
