@@ -4,7 +4,7 @@ import sys
 import random
 import math
 
-class Garland:
+class GarlandComponent:
     def __init__(self):
         self.length = 20
         self.speed = 0.15
@@ -61,7 +61,6 @@ class Garland:
                 frequency = 0.5 + (i % 5) * 0.2
                 phase = self.phases[i]
                 value = 0.5 + 0.5 * math.sin(2 * math.pi * frequency * self.frame / 10 + phase)
-
                 if value > 0.7:
                     garland.append(self.bulbs[i % len(self.bulbs)])
                 elif value > 0.3:
@@ -81,7 +80,6 @@ class Garland:
                 wave_pos = (self.frame + i) % self.length
                 amplitude = 0.5 + 0.5 * math.sin(2 * math.pi * self.frame / 20)
                 value = amplitude * math.sin(2 * math.pi * wave_pos / self.length + self.frame / 10)
-
                 if value > 0.5:
                     garland.append(self.bulbs[i % len(self.bulbs)])
                 elif value > 0:
