@@ -1,175 +1,383 @@
-from .components import StonFiComponents
-from .skills import StonFiSkills
+import sidusai as sai
+from typing import Optional, Dict, Any, List
 
-class StonFiPlugin:
-    def __init__(self, api_key=None):
+from .components import StonFiClientComponent
+from .skills import (
+    token_analysis_skill,
+    swap_simulation_skill,
+    pool_analysis_skill,
+    wallet_info_skill,
+    arbitrage_finder_skill
+)
+
+__stonfi_agent_name__ = 'stonfi_dex_agent'
+
+class StonFiPlugin(sai.AgentPlugin):
+    def __init__(self, api_key: Optional[str] = None):
+        super().__init__()
         self.api_key = api_key
-        self.components = StonFiComponents()
-        self.skills = StonFiSkills(self.components)
+        self.stonfi_client = None
+        print(f"STON.fi Plugin initialized")
 
-    def get_asset(self, address):
-        return self.components.get_asset(address)
+    def apply_plugin(self, agent: sai.Agent):
+        print("Applying STON.fi plugin to agent...")
 
-    def get_assets(self):
-        return self.components.get_assets()
+        try:
+            self.stonfi_client = StonFiClientComponent(api_key=self.api_key)
+            print("STON.fi client component created")
 
-    def query_assets(self, condition=None, limit=None, search_terms=None, sort_by=None, unconditional_assets=None, wallet_address=None):
-        return self.components.query_assets(condition, limit, search_terms, sort_by, unconditional_assets, wallet_address)
+            self.skills = {}
 
-    def search_assets(self, search_string, condition=None, unconditional_asset=None, limit=None, wallet_address=None):
-        return self.components.search_assets(search_string, condition, unconditional_asset, limit, wallet_address)
+            def analyze_token_wrapper(agent_value: sai.AgentValue) -> sai.AgentValue:
+                context = getattr(agent_value, 'value', {})
+                if not context:
+                    context = agent_value
+                context['stonfi_client'] = self.stonfi_client
+                result = token_analysis_skill(context)
+                return_value = sai.AgentValue()
+                return_value.value = result
+                return return_value
 
-    def get_pool(self, address):
-        return self.components.get_pool(address)
+            def simulate_swap_wrapper(agent_value: sai.AgentValue) -> sai.AgentValue:
+                context = getattr(agent_value, 'value', {})
+                if not context:
+                    context = agent_value
+                context['stonfi_client'] = self.stonfi_client
+                result = swap_simulation_skill(context)
+                return_value = sai.AgentValue()
+                return_value.value = result
+                return return_value
 
-    def get_pools(self, dex_v2=True):
-        return self.components.get_pools(dex_v2)
+            def analyze_pool_wrapper(agent_value: sai.AgentValue) -> sai.AgentValue:
+                context = getattr(agent_value, 'value', {})
+                if not context:
+                    context = agent_value
+                context['stonfi_client'] = self.stonfi_client
+                result = pool_analysis_skill(context)
+                return_value = sai.AgentValue()
+                return_value.value = result
+                return return_value
 
-    def get_pools_by_market(self, asset_0, asset_1):
-        return self.components.get_pools_by_market(asset_0, asset_1)
+            def analyze_portfolio_wrapper(agent_value: sai.AgentValue) -> sai.AgentValue:
+                context = getattr(agent_value, 'value', {})
+                if not context:
+                    context = agent_value
+                context['stonfi_client'] = self.stonfi_client
+                result = wallet_info_skill(context)
+                return_value = sai.AgentValue()
+                return_value.value = result
+                return return_value
 
-    def query_pools(self, condition=None, dex_v2=True, limit=None, search_terms=None, sort_by=None, unconditional_assets=None, wallet_address=None):
-        return self.components.query_pools(condition, dex_v2, limit, search_terms, sort_by, unconditional_assets, wallet_address)
+            def find_arbitrage_wrapper(agent_value: sai.AgentValue) -> sai.AgentValue:
+                context = getattr(agent_value, 'value', {})
+                if not context:
+                    context = agent_value
+                context['stonfi_client'] = self.stonfi_client
+                result = arbitrage_finder_skill(context)
+                return_value = sai.AgentValue()
+                return_value.value = result
+                return return_value
 
-    def get_farm(self, address):
-        return self.components.get_farm(address)
+            self.skills = {
+                'analyze_token': analyze_token_wrapper,
+                'simulate_swap': simulate_swap_wrapper,
+                'analyze_pool': analyze_pool_wrapper,
+                'analyze_portfolio': analyze_portfolio_wrapper,
+                'find_arbitrage': find_arbitrage_wrapper,
+            }
 
-    def get_farms(self, dex_v2=True, only_active=False):
-        return self.components.get_farms(dex_v2, only_active)
+            for skill_name, skill_func in self.skills.items():
+                agent.add_skill(skill_func, name=skill_name)
 
-    def get_farms_by_pool(self, pool_address):
-        return self.components.get_farms_by_pool(pool_address)
+            agent.stonfi_client = self.stonfi_client
+            agent.stonfi_skills = self.skills
 
-    def simulate_swap(self, offer_address, ask_address, units, slippage_tolerance, pool_address=None, referral_address=None, referral_fee_bps=None, dex_v2=True, dex_version=None):
-        return self.components.simulate_swap(offer_address, ask_address, units, slippage_tolerance, pool_address, referral_address, referral_fee_bps, dex_v2, dex_version)
+            print("STON.fi plugin applied successfully")
 
-    def simulate_reverse_swap(self, offer_address, ask_address, units, slippage_tolerance, pool_address=None, referral_address=None, referral_fee_bps=None, dex_v2=True, dex_version=None):
-        return self.components.simulate_reverse_swap(offer_address, ask_address, units, slippage_tolerance, pool_address, referral_address, referral_fee_bps, dex_v2, dex_version)
+        except Exception as e:
+            print(f"Error applying STON.fi plugin: {e}")
+            import traceback
+            traceback.print_exc()
 
-    def get_swap_status(self, router_address, owner_address, query_id):
-        return self.components.get_swap_status(router_address, owner_address, query_id)
+class StonFiAgent(sai.Agent):
+    def __init__(self, api_key: Optional[str] = None, name: str = __stonfi_agent_name__):
+        super().__init__()
+        self._name = name
+        self.api_key = api_key
 
-    def simulate_liquidity_provision(self, provision_type, token_a, token_b, slippage_tolerance, pool_address=None, wallet_address=None, token_a_units=None, token_b_units=None):
-        return self.components.simulate_liquidity_provision(provision_type, token_a, token_b, slippage_tolerance, pool_address, wallet_address, token_a_units, token_b_units)
+        print(f"Creating STON.fi Agent '{name}'...")
+        self.plugin = StonFiPlugin(api_key=api_key)
+        self.plugin.apply_plugin(self)
+        print(f"STON.fi Agent '{name}' created successfully")
 
-    def get_markets(self, dex_v2=True):
-        return self.components.get_markets(dex_v2)
+    @property
+    def name(self):
+        return self._name
 
-    def get_router(self, address):
-        return self.components.get_router(address)
+    def _create_agent_value(self, context: Dict[str, Any]) -> sai.AgentValue:
+        try:
+            agent_value = sai.AgentValue()
+            agent_value.value = context
+            return agent_value
+        except Exception as e:
+            print(f"Error creating AgentValue: {e}")
+            agent_value = sai.AgentValue()
+            setattr(agent_value, 'value', context)
+            return agent_value
 
-    def get_routers(self, dex_v2=True):
-        return self.components.get_routers(dex_v2)
+    def analyze_token(self, 
+                     token_address: str,
+                     include_related_pools: bool = True,
+                     include_price_history: bool = False,
+                     price_history_interval: str = '1d',
+                     price_history_limit: int = 30,
+                     pool_search_limit: int = 10,
+                     calculate_volatility: bool = False,
+                     min_liquidity: float = 1000) -> Dict[str, Any]:
 
-    def get_transaction_action_tree(self, hash):
-        return self.components.get_transaction_action_tree(hash)
+        context = {
+            'token_address': token_address,
+            'include_related_pools': include_related_pools,
+            'include_price_history': include_price_history,
+            'price_history_interval': price_history_interval,
+            'price_history_limit': price_history_limit,
+            'pool_search_limit': pool_search_limit,
+            'calculate_volatility': calculate_volatility,
+            'min_liquidity': min_liquidity
+        }
 
-    def query_transactions(self, wallet_address=None, query_id=None, min_tx_timestamp=None, ext_msg_hash=None):
-        return self.components.query_transactions(wallet_address, query_id, min_tx_timestamp, ext_msg_hash)
+        if 'analyze_token' in self.plugin.skills:
+            agent_value = self._create_agent_value(context)
+            result = self.plugin.skills['analyze_token'](agent_value)
+            return getattr(result, 'value', result) if hasattr(result, 'value') else result
+        else:
+            return {"success": False, "error": "Skill not available"}
 
-    def get_jetton_wallet_address(self, jetton_address, owner_address):
-        return self.components.get_jetton_wallet_address(jetton_address, owner_address)
+    def simulate_swap(self,
+                     offer_address: str,
+                     ask_address: str,
+                     units: str,
+                     slippage_tolerance: float = 0.01,
+                     pool_address: Optional[str] = None,
+                     referral_address: Optional[str] = None,
+                     referral_fee_bps: Optional[str] = None,
+                     dex_v2: bool = True,
+                     dex_version: Optional[List[str]] = None,
+                     simulate_both_directions: bool = False,
+                     optimize_route: bool = True,
+                     max_routes_to_check: int = 5) -> Dict[str, Any]:
 
-    def get_wallet_asset(self, wallet_address, asset_address):
-        return self.components.get_wallet_asset(wallet_address, asset_address)
+        context = {
+            'offer_address': offer_address,
+            'ask_address': ask_address,
+            'units': units,
+            'slippage_tolerance': slippage_tolerance,
+            'pool_address': pool_address,
+            'referral_address': referral_address,
+            'referral_fee_bps': referral_fee_bps,
+            'dex_v2': dex_v2,
+            'dex_version': dex_version,
+            'simulate_both_directions': simulate_both_directions,
+            'optimize_route': optimize_route,
+            'max_routes_to_check': max_routes_to_check
+        }
 
-    def get_wallet_assets(self, wallet_address):
-        return self.components.get_wallet_assets(wallet_address)
+        if 'simulate_swap' in self.plugin.skills:
+            agent_value = self._create_agent_value(context)
+            result = self.plugin.skills['simulate_swap'](agent_value)
+            return getattr(result, 'value', result) if hasattr(result, 'value') else result
+        else:
+            return {"success": False, "error": "Skill not available"}
 
-    def get_wallet_pool(self, wallet_address, pool_address):
-        return self.components.get_wallet_pool(wallet_address, pool_address)
+    def analyze_pool(self, 
+                     pool_address: str,
+                     include_stats: bool = True,
+                     stats_period_days: int = 7,
+                     include_farms: bool = True,
+                     include_wallet_position: bool = False,
+                     wallet_address: Optional[str] = None,
+                     calculate_apy: bool = True,
+                     compare_with_market: bool = False,
+                     market_asset_0: Optional[str] = None,
+                     market_asset_1: Optional[str] = None) -> Dict[str, Any]:
 
-    def get_wallet_pools(self, wallet_address, dex_v2=True):
-        return self.components.get_wallet_pools(wallet_address, dex_v2)
+        context = {
+            'pool_address': pool_address,
+            'include_stats': include_stats,
+            'stats_period_days': stats_period_days,
+            'include_farms': include_farms,
+            'include_wallet_position': include_wallet_position,
+            'wallet_address': wallet_address,
+            'calculate_apy': calculate_apy,
+            'compare_with_market': compare_with_market,
+            'market_asset_0': market_asset_0,
+            'market_asset_1': market_asset_1
+        }
 
-    def get_wallet_farm(self, wallet_address, farm_address):
-        return self.components.get_wallet_farm(wallet_address, farm_address)
+        if 'analyze_pool' in self.plugin.skills:
+            agent_value = self._create_agent_value(context)
+            result = self.plugin.skills['analyze_pool'](agent_value)
+            return getattr(result, 'value', result) if hasattr(result, 'value') else result
+        else:
+            return {"success": False, "error": "Skill not available"}
 
-    def get_wallet_farms(self, wallet_address, dex_v2=True, only_active=False):
-        return self.components.get_wallet_farms(wallet_address, dex_v2, only_active)
+    def analyze_portfolio(self, 
+                         wallet_address: str,
+                         include_assets: bool = True,
+                         include_pools: bool = True,
+                         include_farms: bool = True,
+                         include_stakes: bool = True,
+                         include_transactions: bool = False,
+                         transactions_limit: int = 20,
+                         min_asset_value: float = 1.0,
+                         calculate_performance: bool = False,
+                         performance_period_days: int = 30,
+                         group_by_category: bool = True) -> Dict[str, Any]:
 
-    def get_wallet_fee_vaults(self, wallet_address):
-        return self.components.get_wallet_fee_vaults(wallet_address)
+        context = {
+            'wallet_address': wallet_address,
+            'include_assets': include_assets,
+            'include_pools': include_pools,
+            'include_farms': include_farms,
+            'include_stakes': include_stakes,
+            'include_transactions': include_transactions,
+            'transactions_limit': transactions_limit,
+            'min_asset_value': min_asset_value,
+            'calculate_performance': calculate_performance,
+            'performance_period_days': performance_period_days,
+            'group_by_category': group_by_category
+        }
 
-    def get_wallet_operations(self, wallet_address, since, until, op_type=None, dex_v2=True):
-        return self.components.get_wallet_operations(wallet_address, since, until, op_type, dex_v2)
+        if 'analyze_portfolio' in self.plugin.skills:
+            agent_value = self._create_agent_value(context)
+            result = self.plugin.skills['analyze_portfolio'](agent_value)
+            return getattr(result, 'value', result) if hasattr(result, 'value') else result
+        else:
+            return {"success": False, "error": "Skill not available"}
 
-    def get_wallet_stakes(self, wallet_address):
-        return self.components.get_wallet_stakes(wallet_address)
+    def find_arbitrage(self, 
+                  base_token: str = 'EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c',  # Правильный адрес TON
+                  tokens_to_analyze: List[str] = None,
+                  min_profit_percentage: float = 0.1,
+                  max_tokens_to_analyze: int = 8,
+                  max_route_length: int = 4,
+                  min_pool_liquidity: float = 1000,
+                  include_liquidity_check: bool = True,
+                  check_triangular: bool = True,
+                  exclude_tokens: List[str] = None) -> Dict[str, Any]:
 
-    def get_wallet_last_transactions(self, wallet_address, limit=10, min_tx_timestamp=None):
-        return self.components.get_wallet_last_transactions(wallet_address, limit, min_tx_timestamp)
+        context = {
+            'base_token': base_token,
+            'tokens_to_analyze': tokens_to_analyze or [],
+            'min_profit_percentage': min_profit_percentage,
+            'max_tokens_to_analyze': max_tokens_to_analyze,
+            'max_route_length': max_route_length,
+            'min_pool_liquidity': min_pool_liquidity,
+            'include_liquidity_check': include_liquidity_check,
+            'check_triangular': check_triangular,
+            'exclude_tokens': exclude_tokens or []
+        }
 
-    def get_dex_stats(self, since=None, until=None):
-        return self.components.get_dex_stats(since, until)
+        if 'find_arbitrage' in self.plugin.skills:
+            agent_value = self._create_agent_value(context)
+            result = self.plugin.skills['find_arbitrage'](agent_value)
+            return getattr(result, 'value', result) if hasattr(result, 'value') else result
+        else:
+            return {"success": False, "error": "Skill not available"}
 
-    def get_fee_accruals(self, referrer_address, since, until):
-        return self.components.get_fee_accruals(referrer_address, since, until)
+    def market_research(self,
+                       research_type: str = 'general',
+                       target_market: Optional[str] = None,
+                       time_frame_days: int = 7,
+                       top_n: int = 10,
+                       include_volume_analysis: bool = True,
+                       include_liquidity_analysis: bool = True,
+                       include_price_action: bool = True,
+                       min_daily_volume: float = 10000,
+                       sort_by: str = 'volume') -> Dict[str, Any]:
 
-    def get_fee_withdrawals(self, referrer_address, since, until):
-        return self.components.get_fee_withdrawals(referrer_address, since, until)
+        context = {
+            'research_type': research_type,
+            'target_market': target_market,
+            'time_frame_days': time_frame_days,
+            'top_n': top_n,
+            'include_volume_analysis': include_volume_analysis,
+            'include_liquidity_analysis': include_liquidity_analysis,
+            'include_price_action': include_price_action,
+            'min_daily_volume': min_daily_volume,
+            'sort_by': sort_by
+        }
 
-    def get_fees_stats(self, referrer_address, since, until):
-        return self.components.get_fees_stats(referrer_address, since, until)
+        if 'market_research' in self.plugin.skills:
+            agent_value = self._create_agent_value(context)
+            result = self.plugin.skills['market_research'](agent_value)
+            return getattr(result, 'value', result) if hasattr(result, 'value') else result
+        else:
+            return {"success": False, "error": "Skill not available"}
 
-    def get_operations_stats(self, since, until, pool_address=None):
-        return self.components.get_operations_stats(since, until, pool_address)
+    def simulate_liquidity(self,
+                          provision_type: str = 'Balanced',
+                          token_a: str = None,
+                          token_b: str = None,
+                          token_a_units: Optional[str] = None,
+                          token_b_units: Optional[str] = None,
+                          pool_address: Optional[str] = None,
+                          wallet_address: Optional[str] = None,
+                          slippage_tolerance: float = 0.01,
+                          simulate_multiple_scenarios: bool = False,
+                          scenario_count: int = 3,
+                          include_impermanent_loss: bool = True,
+                          price_change_scenarios: List[float] = None) -> Dict[str, Any]:
 
-    def get_pool_stats(self, since, until, pool_address=None):
-        return self.components.get_pool_stats(since, until, pool_address)
+        if price_change_scenarios is None:
+            price_change_scenarios = [-0.1, 0.0, 0.1]
 
-    def get_staking_stats(self):
-        return self.components.get_staking_stats()
+        context = {
+            'provision_type': provision_type,
+            'token_a': token_a,
+            'token_b': token_b,
+            'token_a_units': token_a_units,
+            'token_b_units': token_b_units,
+            'pool_address': pool_address,
+            'wallet_address': wallet_address,
+            'slippage_tolerance': slippage_tolerance,
+            'simulate_multiple_scenarios': simulate_multiple_scenarios,
+            'scenario_count': scenario_count,
+            'include_impermanent_loss': include_impermanent_loss,
+            'price_change_scenarios': price_change_scenarios
+        }
 
-    def get_cmc_data(self):
-        return self.components.get_cmc_data()
+        if 'simulate_liquidity' in self.plugin.skills:
+            agent_value = self._create_agent_value(context)
+            result = self.plugin.skills['simulate_liquidity'](agent_value)
+            return getattr(result, 'value', result) if hasattr(result, 'value') else result
+        else:
+            return {"success": False, "error": "Skill not available"}
 
-    def get_screener_asset_info(self, address):
-        return self.components.get_screener_asset_info(address)
+def create_stonfi_agent(api_key: Optional[str] = None) -> StonFiAgent:
+    return StonFiAgent(api_key=api_key)
 
-    def get_screener_events(self, from_block, to_block):
-        return self.components.get_screener_events(from_block, to_block)
+class SimpleStonFiClient:
+    def __init__(self, api_key: Optional[str] = None):
+        from .components import StonFiClientComponent
+        self.client = StonFiClientComponent(api_key=api_key)
 
-    def get_screener_latest_block(self):
-        return self.components.get_screener_latest_block()
+    def analyze_pool(self, pool_address: str) -> Dict[str, Any]:
+        return self.client.get_pool(pool_address)
 
-    def get_screener_pool_info(self, address):
-        return self.components.get_screener_pool_info(address)
+    def analyze_asset(self, asset_address: str) -> Dict[str, Any]:
+        return self.client.get_asset(asset_address)
 
-    def analyze_pool(self, pool_address):
-        return self.skills.analyze_pool(pool_address)
+    def test_connection(self) -> bool:
+        try:
+            return self.client.test_connection()
+        except:
+            return False
 
-    def analyze_asset(self, asset_address):
-        return self.skills.analyze_asset(asset_address)
-
-    def find_arbitrage_opportunities(self):
-        return self.skills.find_arbitrage_opportunities()
-
-    def compare_pools(self, pool_addresses):
-        return self.skills.compare_pools(pool_addresses)
-
-    def get_liquidity_analysis(self, token_address):
-        return self.skills.get_liquidity_analysis(token_address)
-
-    def get_top_performing_pools(self, period="24h"):
-        return self.skills.get_top_performing_pools(period)
-
-    def generate_pool_report(self, pool_address):
-        return self.skills.generate_pool_report(pool_address)
-
-    def calculate_impermanent_loss(self, pool_address, token_a_change, token_b_change):
-        return self.skills.calculate_impermanent_loss(pool_address, token_a_change, token_b_change)
-
-    def analyze_wallet_portfolio(self, wallet_address):
-        return self.skills.analyze_wallet_portfolio(wallet_address)
-
-    def get_swap_recommendations(self, offer_token, ask_token, amount):
-        return self.skills.get_swap_recommendations(offer_token, ask_token, amount)
-
-    def calculate_apy_breakdown(self, farm_address):
-        return self.skills.calculate_apy_breakdown(farm_address)
-
-    def find_arbitrage_opportunities(self, min_profit_usd: float = 10.0, 
-                               min_tvl: float = 1000.0, 
-                               max_price_diff: float = 0.10):
-        return self.skills.find_arbitrage_opportunities(min_profit_usd, min_tvl, max_price_diff)
+__all__ = [
+    'StonFiPlugin',
+    'StonFiAgent',
+    'SimpleStonFiClient',
+    'create_stonfi_agent',
+    'StonFiClientComponent',
+]

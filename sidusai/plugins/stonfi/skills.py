@@ -1,887 +1,1753 @@
-import numpy as np
-from datetime import datetime
-from typing import Dict, List, Any
+from typing import Dict, Any
+from datetime import datetime, timedelta
 
-class StonFiSkills:
-    def __init__(self, components):
-        self.components = components
+class StonFiDataValue:
+    def __init__(self, data: Dict[str, Any]):
+        self.value = data
 
-    def _parse_amount(self, amount_str: str) -> float:
+def token_analysis_skill(context: Dict[str, Any]) -> StonFiDataValue:
+    print("Starting token_analysis_skill...")
+
+    token_address = context.get('token_address')
+
+    try:
+        client = context.get('stonfi_client')
+
+        if not client:
+            result = {"success": False, "error": "StonFi client not available"}
+            return StonFiDataValue(result)
+
         try:
-            return float(amount_str)
-        except:
-            return 0.0
+            response = client.get_asset(token_address)
 
-    def analyze_pool(self, pool_address: str) -> Dict[str, Any]:
-        try:
-            pool_data = self.components.get_pool(pool_address)
+            if isinstance(response, dict) and 'asset' in response:
+                token_data = response['asset']
 
-            if "pool" not in pool_data:
-                return {"success": False, "error": "Invalid pool data"}
+                symbol = token_data.get('symbol', 'N/A')
+                name = token_data.get('display_name', 'N/A')
+                contract_address = token_data.get('contract_address', token_address)
 
-            pool = pool_data["pool"]
+                price = None
+                for price_key in ['dex_price_usd', 'dex_usd_price', 'third_party_price_usd', 'third_party_usd_price']:
+                    if price_key in token_data and token_data[price_key]:
+                        try:
+                            price = float(token_data[price_key])
+                            break
+                        except:
+                            continue
 
-            reserve0 = self._parse_amount(pool.get("reserve0", "0"))
-            reserve1 = self._parse_amount(pool.get("reserve1", "0"))
-            volume_24h = self._parse_amount(pool.get("volume_24h_usd", "0"))
-            lp_total_supply = self._parse_amount(pool.get("lp_total_supply", "0"))
-            lp_price = self._parse_amount(pool.get("lp_price_usd", "0"))
-
-            tvl_usd = reserve0 + reserve1
-            if lp_total_supply > 0:
-                lp_value = tvl_usd / lp_total_supply
-            else:
-                lp_value = 0
-
-            lp_fee = self._parse_amount(pool.get("lp_fee", "0"))
-            protocol_fee = self._parse_amount(pool.get("protocol_fee", "0"))
-            ref_fee = self._parse_amount(pool.get("ref_fee", "0"))
-            total_fee = lp_fee + protocol_fee + ref_fee
-
-            apy_1d = self._parse_amount(pool.get("apy_1d", "0"))
-            apy_7d = self._parse_amount(pool.get("apy_7d", "0"))
-            apy_30d = self._parse_amount(pool.get("apy_30d", "0"))
-
-            token0 = pool.get("token0_address", "")
-            token1 = pool.get("token1_address", "")
-
-            price_ratio = reserve1 / reserve0 if reserve0 > 0 else 0
-
-            health_score = 0
-            if tvl_usd > 10000:
-                health_score += 30
-
-            if volume_24h > tvl_usd * 0.1:
-                health_score += 30
-
-            if apy_30d > 0.05:
-                health_score += 20
-
-            if not pool.get("deprecated", False):
-                health_score += 20
-
-            return {
-                "success": True,
-                "pool_address": pool_address,
-                "tokens": [token0, token1],
-                "tvl_usd": round(tvl_usd, 2),
-                "volume_24h_usd": round(volume_24h, 2),
-                "liquidity": {
-                    "token0": round(reserve0, 2),
-                    "token1": round(reserve1, 2),
-                    "total": round(tvl_usd, 2)
-                },
-                "fees": {
-                    "lp_fee": lp_fee,
-                    "protocol_fee": protocol_fee,
-                    "ref_fee": ref_fee,
-                    "total_fee": total_fee
-                },
-                "apy": {
-                    "1d": round(apy_1d * 100, 2),
-                    "7d": round(apy_7d * 100, 2),
-                    "30d": round(apy_30d * 100, 2)
-                },
-                "lp_metrics": {
-                    "total_supply": lp_total_supply,
-                    "price_usd": round(lp_price, 4),
-                    "value": round(lp_value, 4)
-                },
-                "health_score": min(health_score, 100),
-                "deprecated": pool.get("deprecated", False),
-                "price_ratio": round(price_ratio, 6),
-                "timestamp": datetime.now().isoformat()
-            }
-
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-
-    def analyze_asset(self, asset_address: str) -> Dict[str, Any]:
-        try:
-            asset_data = self.components.get_asset(asset_address)
-
-            if "asset" not in asset_data:
-                return {"success": False, "error": "Invalid asset data"}
-
-            asset = asset_data["asset"]
-
-            dex_price = self._parse_amount(asset.get("dex_price_usd", "0"))
-            third_party_price = self._parse_amount(asset.get("third_party_price_usd", "0"))
-            dex_usd_price = self._parse_amount(asset.get("dex_usd_price", "0"))
-            third_party_usd_price = self._parse_amount(asset.get("third_party_usd_price", "0"))
-
-            if dex_price > 0:
-                price = dex_price
-                price_source = "dex"
-            elif third_party_price > 0:
-                price = third_party_price
-                price_source = "third_party"
-            elif dex_usd_price > 0:
-                price = dex_usd_price
-                price_source = "dex_usd"
-            elif third_party_usd_price > 0:
-                price = third_party_usd_price
-                price_source = "third_party_usd"
-            else:
-                price = 0
-                price_source = "unknown"
-
-            balance = self._parse_amount(asset.get("balance", "0"))
-
-            decimals = asset.get("decimals", 9)
-            scale = self._parse_amount(asset.get("scale", "1"))
-            total_supply = balance * (10 ** (decimals - 9))
-
-            if scale > 0:
-                total_supply *= scale
-
-            market_cap = price * total_supply
-
-            health_score = 0
-
-            if price > 0:
-                health_score += 20
-
-            if not asset.get("blacklisted", False):
-                health_score += 20
-
-            if not asset.get("deprecated", False):
-                health_score += 20
-
-            if asset.get("community", False):
-                health_score += 10
-
-            if asset.get("taxable", False):
-                health_score += 10
-
-            popularity = asset.get("popularity_index", 0)
-            health_score += min(popularity, 20)
-
-            return {
-                "success": True,
-                "asset_address": asset_address,
-                "name": asset.get("display_name", "Unknown"),
-                "symbol": asset.get("symbol", "UNKNOWN"),
-                "kind": asset.get("kind", "Unknown"),
-                "price": {
-                    "value": round(price, 6),
-                    "source": price_source,
-                    "dex": round(dex_price, 6),
-                    "third_party": round(third_party_price, 6)
-                },
-                "metrics": {
-                    "decimals": decimals,
-                    "balance": balance,
-                    "total_supply": total_supply,
-                    "market_cap": round(market_cap, 2),
-                    "popularity": popularity
-                },
-                "flags": {
-                    "blacklisted": asset.get("blacklisted", False),
-                    "community": asset.get("community", False),
-                    "deprecated": asset.get("deprecated", False),
-                    "taxable": asset.get("taxable", False),
-                    "default_symbol": asset.get("default_symbol", False)
-                },
-                "health_score": min(health_score, 100),
-                "timestamp": datetime.now().isoformat()
-            }
-
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-
-    def find_arbitrage_opportunities(self, min_profit_usd: float = 10.0, 
-                               min_tvl: float = 1000.0, 
-                               max_price_diff: float = 0.10) -> List[Dict[str, Any]]:
-        try:
-            pools_data = self.components.get_pools()
-
-            if "pool_list" not in pools_data:
-                return []
-
-            opportunities = []
-            pools = pools_data["pool_list"]
-
-            valid_pools = []
-            for pool in pools:
-                try:
-                    reserve0 = self._parse_amount(pool.get("reserve0", "0"))
-                    reserve1 = self._parse_amount(pool.get("reserve1", "0"))
-                    tvl = reserve0 + reserve1
-
-                    if (tvl >= min_tvl and 
-                        reserve0 > 0 and 
-                        reserve1 > 0 and 
-                        not pool.get("deprecated", False)):
-
-                        valid_pools.append({
-                            "address": pool.get("address"),
-                            "token0": pool.get("token0_address"),
-                            "token1": pool.get("token1_address"),
-                            "reserve0": reserve0,
-                            "reserve1": reserve1,
-                            "tvl": tvl,
-                            "volume_24h": self._parse_amount(pool.get("volume_24h_usd", "0"))
-                        })
-
-                except:
-                    continue
-
-            print(f"   ℹ️  Valid pools for analysis: {len(valid_pools)}/{len(pools)}")
-
-            token_pools = {}
-            for pool in valid_pools:
-                token0 = pool.get("token0")
-                token1 = pool.get("token1")
-
-                if token0 and token1:
-                    pair = tuple(sorted([token0, token1]))
-                    if pair not in token_pools:
-                        token_pools[pair] = []
-                    token_pools[pair].append(pool)
-
-            for pair, pool_list in token_pools.items():
-                if len(pool_list) >= 2:
-                    prices = []
-                    for pool in pool_list:
-                        reserve0 = pool.get("reserve0", 0)
-                        reserve1 = pool.get("reserve1", 0)
-
-                        if reserve0 > 0 and reserve1 > 0:
-                            price = reserve1 / reserve0
-
-                            if 0.000001 < price < 1000000:
-                                prices.append({
-                                    "pool": pool.get("address"),
-                                    "price": price,
-                                    "reserve0": reserve0,
-                                    "reserve1": reserve1,
-                                    "tvl": pool.get("tvl", 0),
-                                    "volume_24h": pool.get("volume_24h", 0)
-                                })
-
-                    if len(prices) >= 2:
-                        min_price = min(p['price'] for p in prices)
-                        max_price = max(p['price'] for p in prices)
-
-                        if min_price > 0:
-                            price_diff_pct = (max_price - min_price) / min_price
-
-                            if 0.01 <= price_diff_pct <= max_price_diff:
-                                min_pool = next(p for p in prices if p['price'] == min_price)
-                                max_pool = next(p for p in prices if p['price'] == max_price)
-
-                                trade_size_token0 = min(
-                                    min_pool['reserve0'] * 0.01,
-                                    max_pool['reserve1'] / max_price * 0.01
-                                )
-
-                                if trade_size_token0 > 1:
-                                    estimated_profit = trade_size_token0 * (max_price - min_price)
-
-                                    fee_percentage = 0.003 * 2
-                                    fee_amount = trade_size_token0 * max_price * fee_percentage
-                                    net_profit = estimated_profit - fee_amount
-
-                                    if net_profit >= min_profit_usd:
-                                        try:
-                                            token0_info = self.components.get_asset(pair[0])
-                                            token1_info = self.components.get_asset(pair[1])
-
-                                            symbol0 = token0_info.get("asset", {}).get("symbol", pair[0][:8])
-                                            symbol1 = token1_info.get("asset", {}).get("symbol", pair[1][:8])
-                                        except:
-                                            symbol0 = pair[0][:8]
-                                            symbol1 = pair[1][:8]
-
-                                        opportunities.append({
-                                            "token_pair": list(pair),
-                                            "symbol_pair": f"{symbol0}/{symbol1}",
-                                            "price_difference_pct": round(price_diff_pct * 100, 2),
-                                            "estimated_profit_usd": round(estimated_profit, 2),
-                                            "net_profit_usd": round(net_profit, 2),
-                                            "trade_size_estimate": round(trade_size_token0, 2),
-                                            "trade_size_usd": round(trade_size_token0 * ((min_price + max_price) / 2), 2),
-                                            "cheap_pool": min_pool['pool'],
-                                            "cheap_price": round(min_price, 6),
-                                            "expensive_pool": max_pool['pool'],
-                                            "expensive_price": round(max_price, 6),
-                                            "cheap_pool_tvl": round(min_pool['tvl'], 2),
-                                            "expensive_pool_tvl": round(max_pool['tvl'], 2),
-                                            "timestamp": datetime.now().isoformat()
-                                        })
-
-            opportunities.sort(key=lambda x: x['net_profit_usd'], reverse=True)
-
-            return opportunities
-
-        except Exception as e:
-            print(f"Error finding arbitrage opportunities: {e}")
-            return []
-
-    def compare_pools(self, pool_addresses: List[str]) -> Dict[str, Any]:
-        try:
-            comparison = {}
-
-            for address in pool_addresses:
-                analysis = self.analyze_pool(address)
-                if analysis["success"]:
-                    comparison[address] = analysis
-                else:
-                    comparison[address] = {"success": False, "error": analysis.get("error", "Unknown error")}
-
-            successful = {k: v for k, v in comparison.items() if v.get("success", False)}
-
-            if len(successful) >= 2:
-                best_by_tvl = max(successful.items(), key=lambda x: x[1].get("tvl_usd", 0))
-                best_by_volume = max(successful.items(), key=lambda x: x[1].get("volume_24h_usd", 0))
-                best_by_apy = max(successful.items(), key=lambda x: x[1].get("apy", {}).get("30d", 0))
-                best_by_health = max(successful.items(), key=lambda x: x[1].get("health_score", 0))
-
-                comparison["summary"] = {
-                    "total_pools": len(pool_addresses),
-                    "successful_analyses": len(successful),
-                    "best_by_tvl": best_by_tvl[0],
-                    "best_by_volume": best_by_volume[0],
-                    "best_by_apy": best_by_apy[0],
-                    "best_by_health": best_by_health[0],
-                    "average_tvl": sum(v.get("tvl_usd", 0) for v in successful.values()) / len(successful),
-                    "average_apy": sum(v.get("apy", {}).get("30d", 0) for v in successful.values()) / len(successful)
+                analysis_result = {
+                    "success": True,
+                    "symbol": symbol,
+                    "name": name,
+                    "address": contract_address,
+                    "price_usd": price,
+                    "price_formatted": f"${price:.6f}" if price else "N/A",
+                    "decimals": token_data.get('decimals', 'N/A'),
+                    "token_type": token_data.get('kind', 'N/A'),
+                    "tags": token_data.get('tags', []),
+                    "timestamp": datetime.now().isoformat()
                 }
 
-            return comparison
+                print(f"✅ Token analysis: {symbol} ({name}) - Price: ${price if price else 'N/A'}")
+
+            else:
+                analysis_result = {
+                    "success": False,
+                    "error": "Invalid response structure from API",
+                    "timestamp": datetime.now().isoformat()
+                }
 
         except Exception as e:
-            return {"success": False, "error": str(e)}
-
-    def get_liquidity_analysis(self, token_address: str) -> Dict[str, Any]:
-        try:
-            pools_data = self.components.get_pools()
-
-            if "pool_list" not in pools_data:
-                return {"success": False, "error": "No pools data"}
-
-            token_pools = []
-            total_liquidity = 0
-
-            for pool in pools_data["pool_list"]:
-                token0 = pool.get("token0_address")
-                token1 = pool.get("token1_address")
-
-                if token0 == token_address or token1 == token_address:
-                    reserve0 = self._parse_amount(pool.get("reserve0", "0"))
-                    reserve1 = self._parse_amount(pool.get("reserve1", "0"))
-                    tvl = reserve0 + reserve1
-
-                    token_pools.append({
-                        "pool_address": pool.get("address"),
-                        "paired_token": token1 if token0 == token_address else token0,
-                        "token_reserve": reserve0 if token0 == token_address else reserve1,
-                        "paired_reserve": reserve1 if token0 == token_address else reserve0,
-                        "tvl": tvl,
-                        "price": paired_reserve / token_reserve if token_reserve > 0 else 0
-                    })
-
-                    total_liquidity += tvl
-
-            concentration = 0
-            if total_liquidity > 0:
-                for pool in token_pools:
-                    share = pool["tvl"] / total_liquidity
-                    concentration += share ** 2
-
-            token_pools.sort(key=lambda x: x["tvl"], reverse=True)
-            top_pools = token_pools[:5] if len(token_pools) > 5 else token_pools
-
-            depth_score = 0
-            if len(token_pools) >= 3:
-                depth_score += 30
-            if total_liquidity > 100000:
-                depth_score += 40
-            if concentration < 0.5:
-                depth_score += 30
-
-            return {
-                "success": True,
-                "token_address": token_address,
-                "total_pools": len(token_pools),
-                "total_liquidity_usd": round(total_liquidity, 2),
-                "concentration_index": round(concentration, 3),
-                "depth_score": min(depth_score, 100),
-                "top_pools": top_pools,
-                "pool_count_by_size": {
-                    "large": len([p for p in token_pools if p["tvl"] > 100000]),
-                    "medium": len([p for p in token_pools if 10000 <= p["tvl"] <= 100000]),
-                    "small": len([p for p in token_pools if p["tvl"] < 10000])
-                },
+            print(f"Error getting token info: {e}")
+            analysis_result = {
+                "success": False,
+                "error": f"Failed to get token info: {str(e)}",
                 "timestamp": datetime.now().isoformat()
             }
+            return StonFiDataValue(analysis_result)
 
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        if analysis_result.get('success'):
+            try:
+                pools_response = client.get_pools()
+                related_pools = []
 
-    def get_top_performing_pools(self, period: str = "24h", limit: int = 10) -> List[Dict[str, Any]]:
+                if isinstance(pools_response, dict) and 'pool_list' in pools_response:
+                    pools = pools_response['pool_list']
+                    print(f"Found {len(pools)} pools total")
+
+                    processed = 0
+                    matched = 0
+
+                    for pool in pools[:500]:
+                        processed += 1
+                        if not isinstance(pool, dict):
+                            continue
+
+                        token0_addr = pool.get('token0_address', '')
+                        token1_addr = pool.get('token1_address', '')
+
+                        if token_address in [token0_addr, token1_addr]:
+                            matched += 1
+
+                            token0_symbol = 'UNKNOWN'
+                            token1_symbol = 'UNKNOWN'
+
+                            try:
+                                if token0_addr:
+                                    token0_info = client.get_asset(token0_addr)
+                                    if isinstance(token0_info, dict) and 'asset' in token0_info:
+                                        token0_asset = token0_info['asset']
+                                        token0_symbol = token0_asset.get('symbol', token0_addr[:6])
+                                    else:
+                                        token0_symbol = token0_addr[:6]
+                            except:
+                                token0_symbol = token0_addr[:6] if token0_addr else 'UNKNOWN'
+
+                            try:
+                                if token1_addr:
+                                    token1_info = client.get_asset(token1_addr)
+                                    if isinstance(token1_info, dict) and 'asset' in token1_info:
+                                        token1_asset = token1_info['asset']
+                                        token1_symbol = token1_asset.get('symbol', token1_addr[:6])
+                                    else:
+                                        token1_symbol = token1_addr[:6]
+                            except:
+                                token1_symbol = token1_addr[:6] if token1_addr else 'UNKNOWN'
+
+                            if token0_addr == token_address:
+                                pair = f"{symbol}/{token1_symbol}"
+                            else:
+                                pair = f"{token0_symbol}/{symbol}"
+
+                            lp_total_supply_usd_str = pool.get('lp_total_supply_usd', '0')
+                            try:
+                                lp_total_supply_usd = float(lp_total_supply_usd_str)
+                            except:
+                                lp_total_supply_usd = 0
+
+                            volume_24h_usd_str = pool.get('volume_24h_usd', '0')
+                            try:
+                                volume_24h_usd = float(volume_24h_usd_str)
+                            except:
+                                volume_24h_usd = 0
+
+                            reserve0_str = pool.get('reserve0', '0')
+                            reserve1_str = pool.get('reserve1', '0')
+                            try:
+                                reserve0 = float(reserve0_str)
+                                reserve1 = float(reserve1_str)
+                            except:
+                                reserve0 = 0
+                                reserve1 = 0
+
+                            apy_30d_str = pool.get('apy_30d', '0')
+                            try:
+                                apy_30d = float(apy_30d_str) * 100
+                            except:
+                                apy_30d = 0
+
+                            token_price_in_pool = None
+                            if token0_addr == token_address and reserve1 > 0 and reserve0 > 0:
+                                token_price_in_pool = reserve1 / reserve0
+                            elif token1_addr == token_address and reserve0 > 0 and reserve1 > 0:
+                                token_price_in_pool = reserve0 / reserve1
+
+                            pool_info = {
+                                "pool_address": pool.get('address', ''),
+                                "pair": pair,
+                                "liquidity_usd": lp_total_supply_usd,
+                                "liquidity_formatted": f"${lp_total_supply_usd:,.2f}",
+                                "volume_24h_usd": volume_24h_usd,
+                                "volume_24h_formatted": f"${volume_24h_usd:,.2f}",
+                                "apy_30d": apy_30d,
+                                "apy_formatted": f"{apy_30d:.2f}%",
+                                "reserve0": reserve0,
+                                "reserve1": reserve1,
+                                "token0": {
+                                    "symbol": token0_symbol,
+                                    "address": token0_addr,
+                                    "is_our_token": token0_addr == token_address,
+                                    "reserve": reserve0
+                                },
+                                "token1": {
+                                    "symbol": token1_symbol,
+                                    "address": token1_addr,
+                                    "is_our_token": token1_addr == token_address,
+                                    "reserve": reserve1
+                                },
+                                "token_price_in_pool": token_price_in_pool,
+                                "token_price_formatted": f"${token_price_in_pool:.6f}" if token_price_in_pool else "N/A",
+                                "lp_price_usd": float(pool.get('lp_price_usd', 0)) if pool.get('lp_price_usd') else 0,
+                                "protocol_fee": pool.get('protocol_fee', ''),
+                                "lp_fee": pool.get('lp_fee', '')
+                            }
+
+                            related_pools.append(pool_info)
+
+                    print(f"Processed {processed} pools, found {matched} matches")
+
+                    active_pools = [p for p in related_pools if p['liquidity_usd'] > 100]
+
+                    if active_pools:
+                        active_pools.sort(key=lambda x: x['liquidity_usd'], reverse=True)
+
+                        total_liquidity = sum(p['liquidity_usd'] for p in active_pools)
+                        total_volume = sum(p['volume_24h_usd'] for p in active_pools)
+
+                        partner_stats = {}
+                        for pool in active_pools:
+                            if pool['token0']['is_our_token']:
+                                partner = pool['token1']['symbol']
+                            else:
+                                partner = pool['token0']['symbol']
+
+                            if partner not in partner_stats:
+                                partner_stats[partner] = {
+                                    'liquidity': 0, 
+                                    'volume': 0,
+                                    'pools': 0,
+                                    'avg_apy': 0
+                                }
+
+                            partner_stats[partner]['liquidity'] += pool['liquidity_usd']
+                            partner_stats[partner]['volume'] += pool['volume_24h_usd']
+                            partner_stats[partner]['pools'] += 1
+                            partner_stats[partner]['avg_apy'] += pool['apy_30d']
+
+                        for partner in partner_stats:
+                            if partner_stats[partner]['pools'] > 0:
+                                partner_stats[partner]['avg_apy'] /= partner_stats[partner]['pools']
+
+                        top_partners = sorted(
+                            [(k, v['liquidity'], v['volume'], v['pools'], v['avg_apy']) 
+                             for k, v in partner_stats.items()],
+                            key=lambda x: x[1],
+                            reverse=True
+                        )[:5]
+
+                        analysis_result.update({
+                            "related_pools": active_pools[:20],
+                            "related_pools_count": len(active_pools),
+                            "total_pools_found": matched,
+                            "total_liquidity_usd": total_liquidity,
+                            "total_liquidity_formatted": f"${total_liquidity:,.2f}",
+                            "total_volume_24h_usd": total_volume,
+                            "total_volume_formatted": f"${total_volume:,.2f}",
+                            "avg_liquidity_per_pool": total_liquidity / len(active_pools) if active_pools else 0,
+                            "avg_volume_per_pool": total_volume / len(active_pools) if active_pools else 0,
+                            "top_partners": [
+                                {
+                                    "token": token,
+                                    "liquidity": liq,
+                                    "liquidity_formatted": f"${liq:,.0f}",
+                                    "volume": vol,
+                                    "pools": pools,
+                                    "avg_apy": f"{avg_apy:.2f}%"
+                                }
+                                for token, liq, vol, pools, avg_apy in top_partners
+                            ],
+                            "top_pools": [
+                                {
+                                    "pair": p["pair"],
+                                    "liquidity": p["liquidity_formatted"],
+                                    "volume": p["volume_24h_formatted"],
+                                    "apy": p["apy_formatted"],
+                                    "price_in_pool": p["token_price_formatted"]
+                                }
+                                for p in active_pools[:5]
+                            ]
+                        })
+
+                        if active_pools:
+                            top_pool = active_pools[0]
+                            print(f"Top pool: {top_pool['pair']}")
+                            print(f"  Liquidity: {top_pool['liquidity_formatted']}")
+                            print(f"  Volume 24h: {top_pool['volume_24h_formatted']}")
+                            print(f"  APY 30d: {top_pool['apy_formatted']}")
+                            print(f"  Price in pool: {top_pool['token_price_formatted']}")
+
+                        print(f"Total liquidity across {len(active_pools)} active pools: ${total_liquidity:,.2f}")
+                        print(f"Total volume 24h: ${total_volume:,.2f}")
+
+                    else:
+                        print(f"No active pools found (liquidity > $100)")
+                        if related_pools:
+                            related_pools.sort(key=lambda x: x['liquidity_usd'], reverse=True)
+                            analysis_result.update({
+                                "related_pools": related_pools[:10],
+                                "related_pools_count": len(related_pools),
+                                "total_pools_found": matched,
+                                "total_liquidity_usd": sum(p['liquidity_usd'] for p in related_pools),
+                                "note": "All pools have liquidity < $100"
+                            })
+                            print(f"Showing {len(related_pools)} pools with low liquidity")
+                        else:
+                            analysis_result.update({
+                                "related_pools": [],
+                                "related_pools_count": 0,
+                                "total_pools_found": matched
+                            })
+
+                else:
+                    print(f"No pools data found in response")
+                    analysis_result["related_pools"] = []
+                    analysis_result["related_pools_count"] = 0
+
+            except Exception as pool_error:
+                print(f"Warning: Could not fetch pools: {pool_error}")
+                import traceback
+                traceback.print_exc()
+                analysis_result["related_pools_error"] = str(pool_error)
+                analysis_result["related_pools"] = []
+                analysis_result["related_pools_count"] = 0
+
+        return StonFiDataValue(analysis_result)
+
+    except Exception as e:
+        print(f"Error in advanced_token_analysis_skill: {e}")
+        import traceback
+        traceback.print_exc()
+        result = {
+            "success": False, 
+            "error": f"Failed to analyze token: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }
+        return StonFiDataValue(result)
+
+def swap_simulation_skill(context: Dict[str, Any]) -> StonFiDataValue:
+    print("Starting swap_simulation_skill...")
+
+    offer_address = context.get('offer_address')
+    ask_address = context.get('ask_address')
+    units = context.get('units')
+    slippage_tolerance = context.get('slippage_tolerance', 0.01)
+    pool_address = context.get('pool_address')
+
+    if not offer_address or not ask_address or not units:
+        return StonFiDataValue({
+            "success": False, 
+            "error": "Missing required parameters",
+            "timestamp": datetime.now().isoformat()
+        })
+
+    try:
+        client = context.get('stonfi_client')
+        if not client:
+            return StonFiDataValue({
+                "success": False, 
+                "error": "StonFi client not available",
+                "timestamp": datetime.now().isoformat()
+            })
+
+        swap_result = client.simulate_swap(
+            offer_address=offer_address,
+            ask_address=ask_address,
+            units=units,
+            slippage_tolerance=slippage_tolerance,
+            pool_address=pool_address
+        )
+
+        if not swap_result or not isinstance(swap_result, dict):
+            return StonFiDataValue({
+                "success": False, 
+                "error": "Empty or invalid swap result",
+                "timestamp": datetime.now().isoformat()
+            })
+
+        ask_units = swap_result.get('ask_units')
+        min_ask_units = swap_result.get('min_ask_units')
+
+        if not ask_units or ask_units == '0':
+            return StonFiDataValue({
+                "success": False,
+                "error": "Swap returned zero amount",
+                "swap_raw_response": swap_result,
+                "timestamp": datetime.now().isoformat()
+            })
+
         try:
-            pools_data = self.components.get_pools()
+            ask_units_float = float(ask_units)
+            min_ask_units_float = float(min_ask_units) if min_ask_units else 0
 
-            if "pool_list" not in pools_data:
-                return []
+            try:
+                token_info = client.get_asset(ask_address)
+                if isinstance(token_info, dict) and 'asset' in token_info:
+                    decimals = token_info['asset'].get('decimals', 6)
+                else:
+                    decimals = 6
+            except:
+                decimals = 6
 
-            pools = pools_data["pool_list"]
+            ask_amount = ask_units_float / (10 ** decimals)
+            min_ask_amount = min_ask_units_float / (10 ** decimals)
 
-            scored_pools = []
+            result = {
+                "success": True,
+                "forward_swap": {
+                    "ask_units": ask_units_float,
+                    "ask_units_raw": ask_units,
+                    "ask_amount": ask_amount,
+                    "ask_amount_formatted": f"{ask_amount:.6f}",
+                    "min_ask_units": min_ask_units_float,
+                    "min_ask_amount": min_ask_amount,
+                    "min_ask_amount_formatted": f"{min_ask_amount:.6f}",
+                    "swap_rate": swap_result.get('swap_rate'),
+                    "price_impact": swap_result.get('price_impact'),
+                    "fee_percent": swap_result.get('fee_percent'),
+                    "pool_address": swap_result.get('pool_address'),
+                    "raw_response": swap_result
+                },
+                "timestamp": datetime.now().isoformat(),
+                "swap_details": {
+                    "offer_address": offer_address,
+                    "ask_address": ask_address,
+                    "units": units,
+                    "units_readable": f"{float(units) / 1e9:.2f} TON",
+                    "slippage": f"{slippage_tolerance*100:.1f}%",
+                    "pool_address": pool_address or swap_result.get('pool_address', 'auto')
+                }
+            }
+        except ValueError as ve:
+            return StonFiDataValue({
+                "success": False,
+                "error": f"Error parsing swap amounts: {str(ve)}",
+                "raw_response": swap_result,
+                "timestamp": datetime.now().isoformat()
+            })
 
-            for pool in pools:
-                volume = self._parse_amount(pool.get("volume_24h_usd", "0"))
-                tvl = self._parse_amount(pool.get("reserve0", "0")) + self._parse_amount(pool.get("reserve1", "0"))
-                apy_30d = self._parse_amount(pool.get("apy_30d", "0"))
+        simulate_both = context.get('simulate_both_directions', False)
+        if simulate_both:
+            try:
+                reverse_result = client.simulate_reverse_swap(
+                    offer_address=offer_address,
+                    ask_address=ask_address,
+                    units=units,
+                    slippage_tolerance=slippage_tolerance,
+                    pool_address=pool_address
+                )
 
-                if tvl > 0:
-                    volume_ratio = volume / tvl
-                    performance_score = (volume_ratio * 50) + (apy_30d * 5000)
+                if reverse_result and isinstance(reverse_result, dict):
+                    rev_ask_units = reverse_result.get('ask_units')
+                    if rev_ask_units and rev_ask_units != '0':
+                        try:
+                            rev_ask_units_float = float(rev_ask_units)
+                            rev_min_units = reverse_result.get('min_ask_units', '0')
+                            rev_min_units_float = float(rev_min_units) if rev_min_units else 0
 
-                    scored_pools.append({
-                        "pool_address": pool.get("address"),
-                        "tokens": [pool.get("token0_address"), pool.get("token1_address")],
-                        "tvl": round(tvl, 2),
-                        "volume_24h": round(volume, 2),
-                        "volume_ratio": round(volume_ratio, 4),
-                        "apy_30d": round(apy_30d * 100, 2),
-                        "performance_score": round(performance_score, 2),
-                        "deprecated": pool.get("deprecated", False)
-                    })
+                            ton_decimals = 9
+                            rev_ask_amount = rev_ask_units_float / (10 ** ton_decimals)
+                            rev_min_amount = rev_min_units_float / (10 ** ton_decimals)
 
-            scored_pools.sort(key=lambda x: x["performance_score"], reverse=True)
+                            result["reverse_swap"] = {
+                                "ask_units": rev_ask_units_float,
+                                "ask_amount": rev_ask_amount,
+                                "ask_amount_formatted": f"{rev_ask_amount:.6f}",
+                                "min_ask_units": rev_min_units_float,
+                                "min_ask_amount": rev_min_amount,
+                                "min_ask_amount_formatted": f"{rev_min_amount:.6f}",
+                                "raw_response": reverse_result
+                            }
+                        except ValueError:
+                            result["reverse_swap_parse_error"] = "Could not parse reverse swap amounts"
+            except Exception as e:
+                result["reverse_swap_error"] = str(e)
 
-            filtered_pools = [p for p in scored_pools if not p["deprecated"]]
-            return filtered_pools[:limit]
+        print("Processing swap results...")
 
-        except Exception as e:
-            print(f"Error getting top pools: {e}")
-            return []
+        if result.get('success'):
+            print(f"✅ Swap simulation successful!")
 
-    def generate_pool_report(self, pool_address: str) -> str:
-        try:
-            analysis = self.analyze_pool(pool_address)
+            forward = result.get('forward_swap', {})
+            if forward:
+                ask_amount = forward.get('ask_amount', 0)
+                min_amount = forward.get('min_ask_amount', 0)
+                swap_rate = forward.get('swap_rate')
+                price_impact = forward.get('price_impact')
+                fee_percent = forward.get('fee_percent')
 
-            if not analysis["success"]:
-                return f"Error: {analysis.get('error', 'Unknown error')}"
+                print(f"\n📊 Forward swap (TON → USDT):")
+                print(f"   1 TON = {ask_amount:.6f} USDT")
+                print(f"   Minimum output: {min_amount:.6f} USDT")
 
-            pool = analysis
+                if swap_rate:
+                    print(f"   Exchange rate: 1 TON = {swap_rate} USDT")
 
-            farms_data = self.components.get_farms_by_pool(pool_address)
-            farms = farms_data.get("farm_list", [])
+                if price_impact:
+                    print(f"   Price impact: {price_impact}%")
 
-            report = f"""
-{'='*80}
-STON.FI POOL ANALYSIS REPORT
-{'='*80}
+                if fee_percent:
+                    print(f"   Fee: {fee_percent}%")
 
-POOL: {pool_address}
-REPORT TIME: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-DATA SOURCE: STON.fi API
+            reverse = result.get('reverse_swap', {})
+            if reverse:
+                rev_amount = reverse.get('ask_amount', 0)
+                print(f"\n🔄 Reverse swap (USDT → TON):")
+                print(f"   {ask_amount:.2f} USDT = {rev_amount:.6f} TON")
 
-{'='*80}
-OVERVIEW
-{'='*80}
-Tokens: {pool['tokens'][0]} / {pool['tokens'][1]}
-TVL: ${pool['tvl_usd']:,.2f}
-24h Volume: ${pool['volume_24h_usd']:,.2f}
-Volume/TVL Ratio: {pool['volume_24h_usd']/pool['tvl_usd']*100 if pool['tvl_usd'] > 0 else 0:.2f}%
-Health Score: {pool['health_score']}/100
-Deprecated: {'Yes' if pool['deprecated'] else 'No'}
+                if ask_amount > 0 and rev_amount > 0:
+                    effective_rate = rev_amount / ask_amount
+                    print(f"   Effective price: 1 USDT = {effective_rate:.6f} TON")
 
-{'='*80}
-LIQUIDITY DETAILS
-{'='*80}
-Token 0 Reserve: ${pool['liquidity']['token0']:,.2f}
-Token 1 Reserve: ${pool['liquidity']['token1']:,.2f}
-Total Liquidity: ${pool['liquidity']['total']:,.2f}
-Price Ratio: {pool['price_ratio']:.6f}
+            details = result.get('swap_details', {})
+            print(f"\n📋 Swap details:")
+            print(f"   Amount: {details.get('units_readable', 'N/A')}")
+            print(f"   Slippage: {details.get('slippage', 'N/A')}")
 
-{'='*80}
-FEE STRUCTURE
-{'='*80}
-LP Fee: {pool['fees']['lp_fee']:.4f}%
-Protocol Fee: {pool['fees']['protocol_fee']:.4f}%
-Referral Fee: {pool['fees']['ref_fee']:.4f}%
-Total Fee: {pool['fees']['total_fee']:.4f}%
+            pool_addr = forward.get('pool_address') or details.get('pool_address')
+            if pool_addr and pool_addr != 'auto':
+                short_pool = pool_addr[:8] + '...' + pool_addr[-6:]
+                print(f"   Pool: {short_pool}")
 
-{'='*80}
-YIELD METRICS
-{'='*80}
-APY (24h): {pool['apy']['1d']:.2f}%
-APY (7d): {pool['apy']['7d']:.2f}%
-APY (30d): {pool['apy']['30d']:.2f}%
+            print(f"\n3. Pool analysis:")
+            print("-" * 30)
 
-{'='*80}
-LP TOKEN METRICS
-{'='*80}
-Total Supply: {pool['lp_metrics']['total_supply']:,.2f}
-Price: ${pool['lp_metrics']['price_usd']:.6f}
-Value per LP: ${pool['lp_metrics']['value']:.6f}
-            """
+            pool_result = client.get_pool(pool_address) if pool_address else None
 
-            if farms:
-                report += f"""
-{'='*80}
-FARMS ({len(farms)})
-{'='*80}
-"""
-                for i, farm in enumerate(farms[:5], 1):
-                    status = farm.get("status", "Unknown")
-                    apy = farm.get("apy", "0")
-                    report += f"{i}. Status: {status}, APY: {apy}\n"
+            if pool_result and isinstance(pool_result, dict):
+                print(f"✅ Pool analysis successful:")
+                print(f"   Pair: {pool_result.get('pair', 'N/A')}")
 
-            report += f"""
-{'='*80}
-RECOMMENDATIONS
-{'='*80}
-"""
+                metrics = {
+                    "liquidity_formatted": f"${float(pool_result.get('lp_total_supply_usd', 0)):,.2f}",
+                    "volume_24h_formatted": f"${float(pool_result.get('volume_24h_usd', 0)):,.2f}",
+                    "apy_30d_formatted": f"{float(pool_result.get('apy_30d', 0)) * 100:.2f}%",
+                    "reserves_usd": {
+                        "total_formatted": f"${(float(pool_result.get('reserve0', 0)) + float(pool_result.get('reserve1', 0))):,.2f}"
+                    }
+                }
 
-            recommendations = []
+                print(f"   Liquidity: {metrics.get('liquidity_formatted', '$0')}")
+                print(f"   Volume 24h: {metrics.get('volume_24h_formatted', '$0')}")
+                print(f"   APY 30d: {metrics.get('apy_30d_formatted', '0%')}")
+                print(f"   Total reserves: {metrics['reserves_usd']['total_formatted']}")
 
-            if pool['health_score'] < 50:
-                recommendations.append("Low health score - consider higher quality pools")
-
-            if pool['deprecated']:
-                recommendations.append("Pool is deprecated - avoid adding liquidity")
-
-            if pool['tvl_usd'] < 10000:
-                recommendations.append("Low TVL - higher risk of slippage")
-
-            if pool['apy']['30d'] > 20:
-                recommendations.append("High APY - attractive for yield farming")
-
-            if pool['volume_24h_usd'] / pool['tvl_usd'] > 0.5:
-                recommendations.append("High volume/TVL ratio - good fee generation")
-
-            if recommendations:
-                for i, rec in enumerate(recommendations, 1):
-                    report += f"{i}. {rec}\n"
+                result["pool_analysis"] = {
+                    "success": True,
+                    "pool_data": pool_result,
+                    "metrics": metrics
+                }
             else:
-                report += "No specific recommendations\n"
+                result["pool_analysis"] = {
+                    "success": False,
+                    "error": "Pool analysis not available"
+                }
+                print(f"ℹ️ Pool analysis not performed")
 
-            report += f"""
-{'='*80}
-RISK FACTORS
-{'='*80}
-1. Impermanent loss risk
-2. Smart contract risk
-3. Market volatility risk
-4. Liquidity provider risk
-5. Protocol upgrade risk
+        else:
+            error = result.get('error', 'Unknown error') if isinstance(result, dict) else str(result)
+            print(f"\n❌ Error: {error}")
 
-{'='*80}
-DISCLAIMER
-{'='*80}
-This report is for informational purposes only.
-Not financial advice. Always do your own research.
-Past performance is not indicative of future results.
-{'='*80}
-"""
+            if isinstance(result, dict) and 'swap_raw_response' in result:
+                raw = result['swap_raw_response']
+                print(f"\n📋 Raw API response:")
+                print(f"   ask_units: {raw.get('ask_units', 'N/A')}")
+                print(f"   min_ask_units: {raw.get('min_ask_units', 'N/A')}")
+                print(f"   swap_rate: {raw.get('swap_rate', 'N/A')}")
+                print(f"   pool_address: {raw.get('pool_address', 'N/A')}")
 
-            return report
+        return StonFiDataValue(result)
 
-        except Exception as e:
-            return f"Error generating report: {str(e)}"
+    except Exception as e:
+        print(f"❌ Error in swap simulation: {e}")
+        return StonFiDataValue({
+            "success": False, 
+            "error": f"Swap simulation failed: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        })
 
-    def calculate_impermanent_loss(self, pool_address: str, token_a_change: float, token_b_change: float) -> Dict[str, Any]:
+def pool_analysis_skill(context: Dict[str, Any]) -> StonFiDataValue:
+    print("Starting pool_analysis_skill...")
+
+    pool_address = context.get('pool_address')
+
+    try:
+        client = context.get('stonfi_client')
+
+        if not client:
+            result = {"success": False, "error": "StonFi client not available"}
+            return StonFiDataValue(result)
+
         try:
-            pool_data = self.components.get_pool(pool_address)
+            pool_response = client.get_pool(pool_address)
 
-            if "pool" not in pool_data:
-                return {"success": False, "error": "Invalid pool data"}
+            if not pool_response or not isinstance(pool_response, dict):
+                analysis = {
+                    "success": False,
+                    "error": "Invalid response from pool API",
+                    "timestamp": datetime.now().isoformat()
+                }
+                return StonFiDataValue(analysis)
 
-            pool = pool_data["pool"]
+            pool_data = pool_response.get('pool', pool_response)
 
-            reserve0 = self._parse_amount(pool.get("reserve0", "1"))
-            reserve1 = self._parse_amount(pool.get("reserve1", "1"))
+            if not pool_data or not isinstance(pool_data, dict):
+                analysis = {
+                    "success": False,
+                    "error": "Invalid pool data structure",
+                    "timestamp": datetime.now().isoformat()
+                }
+                return StonFiDataValue(analysis)
 
-            current_price = reserve1 / reserve0 if reserve0 > 0 else 1
+            token0_address = pool_data.get('token0_address')
+            token1_address = pool_data.get('token1_address')
 
-            new_reserve0 = reserve0 * (1 + token_a_change)
-            new_reserve1 = reserve1 * (1 + token_b_change)
-            new_price = new_reserve1 / new_reserve0 if new_reserve0 > 0 else current_price
+            tokens_info = {}
 
-            price_ratio_change = new_price / current_price if current_price > 0 else 1
+            for i, (token_addr, token_key) in enumerate([
+                (token0_address, 'token0'),
+                (token1_address, 'token1')
+            ]):
+                if token_addr:
+                    try:
+                        token_response = client.get_asset(token_addr)
 
-            if price_ratio_change > 0:
-                impermanent_loss = (2 * np.sqrt(price_ratio_change) / (1 + price_ratio_change) - 1) * 100
+                        if token_response and isinstance(token_response, dict) and 'asset' in token_response:
+                            token_asset = token_response['asset']
+                            symbol = token_asset.get('symbol', f'TOKEN{i+1}')
+                            name = token_asset.get('display_name', f'Token {i+1}')
+
+                            token_price = None
+                            for price_key in ['dex_price_usd', 'dex_usd_price', 'third_party_price_usd', 'third_party_usd_price']:
+                                if price_key in token_asset and token_asset[price_key]:
+                                    try:
+                                        token_price = float(token_asset[price_key])
+                                        break
+                                    except:
+                                        continue
+
+                            tokens_info[token_key] = {
+                                'address': token_addr,
+                                'symbol': symbol,
+                                'name': name,
+                                'price_usd': token_price,
+                                'price_formatted': f"${token_price:.6f}" if token_price else "N/A",
+                                'decimals': token_asset.get('decimals', 9)
+                            }
+
+                        else:
+                            tokens_info[token_key] = {
+                                'address': token_addr,
+                                'symbol': token_addr[:8],
+                                'name': f'Token {i+1}',
+                                'price_usd': None,
+                                'price_formatted': "N/A",
+                                'decimals': 9
+                            }
+
+                    except Exception:
+                        tokens_info[token_key] = {
+                            'address': token_addr,
+                            'symbol': token_addr[:8] if token_addr else f'TOKEN{i+1}',
+                            'name': f'Token {i+1}',
+                            'price_usd': None,
+                            'price_formatted': "N/A",
+                            'decimals': 9
+                        }
+                else:
+                    tokens_info[token_key] = {
+                        'address': '',
+                        'symbol': f'TOKEN{i+1}',
+                        'name': f'Token {i+1}',
+                        'price_usd': None,
+                        'price_formatted': "N/A",
+                        'decimals': 9
+                    }
+
+            def safe_float(value, default=0):
+                try:
+                    return float(value) if value else default
+                except:
+                    return default
+
+            lp_total_supply_usd = safe_float(pool_data.get('lp_total_supply_usd'))
+            volume_24h_usd = safe_float(pool_data.get('volume_24h_usd'))
+            reserve0 = safe_float(pool_data.get('reserve0'))
+            reserve1 = safe_float(pool_data.get('reserve1'))
+            apy_30d = safe_float(pool_data.get('apy_30d', 0)) * 100
+            apy_7d = safe_float(pool_data.get('apy_7d', 0)) * 100
+            apy_1d = safe_float(pool_data.get('apy_1d', 0)) * 100
+
+            token0_decimals = tokens_info['token0'].get('decimals', 9)
+            token1_decimals = tokens_info['token1'].get('decimals', 9)
+
+            adjusted_reserve0 = reserve0 / (10 ** token0_decimals)
+            adjusted_reserve1 = reserve1 / (10 ** token1_decimals)
+
+            token0_symbol = tokens_info['token0']['symbol']
+            token1_symbol = tokens_info['token1']['symbol']
+
+            price_token1_in_token0 = adjusted_reserve1 / adjusted_reserve0 if adjusted_reserve0 > 0 else 0
+            price_token0_in_token1 = adjusted_reserve0 / adjusted_reserve1 if adjusted_reserve1 > 0 else 0
+
+            token0_price_usd = tokens_info['token0'].get('price_usd')
+            token1_price_usd = tokens_info['token1'].get('price_usd')
+
+            if token0_price_usd and token1_price_usd:
+                implied_price_token0_in_token1 = token0_price_usd / token1_price_usd if token1_price_usd > 0 else 0
+                implied_price_token1_in_token0 = token1_price_usd / token0_price_usd if token0_price_usd > 0 else 0
+
+                price_diff_token0 = abs(price_token0_in_token1 - implied_price_token0_in_token1) / implied_price_token0_in_token1 * 100 if implied_price_token0_in_token1 > 0 else 100
+                price_diff_token1 = abs(price_token1_in_token0 - implied_price_token1_in_token0) / implied_price_token1_in_token0 * 100 if implied_price_token1_in_token0 > 0 else 100
+
+                price_diff_percent = min(price_diff_token0, price_diff_token1)
             else:
-                impermanent_loss = 0
+                price_diff_percent = 0
+                implied_price_token0_in_token1 = 0
+                implied_price_token1_in_token0 = 0
 
-            return {
+            reserve0_usd = adjusted_reserve0 * token0_price_usd if token0_price_usd else 0
+            reserve1_usd = adjusted_reserve1 * token1_price_usd if token1_price_usd else 0
+            total_reserves_usd = reserve0_usd + reserve1_usd
+
+            tvl_imbalance = abs(reserve0_usd - reserve1_usd) / total_reserves_usd * 100 if total_reserves_usd > 0 else 100
+
+            analysis = {
                 "success": True,
                 "pool_address": pool_address,
-                "current_price": round(current_price, 6),
-                "new_price": round(new_price, 6),
-                "price_change_pct": round((new_price / current_price - 1) * 100, 2),
-                "impermanent_loss_pct": round(impermanent_loss, 2),
-                "token_changes": {
-                    "token_a": round(token_a_change * 100, 1),
-                    "token_b": round(token_b_change * 100, 1)
+                "pair": f"{token0_symbol}/{token1_symbol}",
+                "pair_names": f"{tokens_info['token0']['name']}/{tokens_info['token1']['name']}",
+                "tokens": tokens_info,
+                "metrics": {
+                    "liquidity_usd": lp_total_supply_usd,
+                    "liquidity_formatted": f"${lp_total_supply_usd:,.2f}",
+                    "volume_24h_usd": volume_24h_usd,
+                    "volume_24h_formatted": f"${volume_24h_usd:,.2f}",
+                    "apy_30d": apy_30d,
+                    "apy_30d_formatted": f"{apy_30d:.2f}%",
+                    "apy_7d": apy_7d,
+                    "apy_7d_formatted": f"{apy_7d:.2f}%",
+                    "apy_1d": apy_1d,
+                    "apy_1d_formatted": f"{apy_1d:.2f}%",
+                    "reserves": {
+                        "token0_raw": reserve0,
+                        "token1_raw": reserve1,
+                        "token0_adjusted": adjusted_reserve0,
+                        "token1_adjusted": adjusted_reserve1,
+                        "token0_formatted": f"{adjusted_reserve0:,.2f}",
+                        "token1_formatted": f"{adjusted_reserve1:,.2f}"
+                    },
+                    "prices": {
+                        "token1_in_token0": price_token1_in_token0,
+                        "token1_in_token0_formatted": f"1 {token0_symbol} = {price_token1_in_token0:,.6f} {token1_symbol}",
+                        "token0_in_token1": price_token0_in_token1,
+                        "token0_in_token1_formatted": f"1 {token1_symbol} = {price_token0_in_token1:,.6f} {token0_symbol}",
+                        "implied_token0_in_token1": implied_price_token0_in_token1,
+                        "implied_token1_in_token0": implied_price_token1_in_token0,
+                        "price_diff_percent": price_diff_percent,
+                        "price_diff_formatted": f"{price_diff_percent:.2f}%"
+                    },
+                    "reserves_usd": {
+                        "token0": reserve0_usd,
+                        "token1": reserve1_usd,
+                        "total": total_reserves_usd,
+                        "token0_formatted": f"${reserve0_usd:,.2f}" if reserve0_usd else "N/A",
+                        "token1_formatted": f"${reserve1_usd:,.2f}" if reserve1_usd else "N/A",
+                        "total_formatted": f"${total_reserves_usd:,.2f}" if total_reserves_usd else "N/A",
+                        "tvl_imbalance": tvl_imbalance,
+                        "tvl_imbalance_formatted": f"{tvl_imbalance:.2f}%"
+                    },
+                    "lp_metrics": {
+                        "total_supply": pool_data.get('lp_total_supply', '0'),
+                        "price_usd": safe_float(pool_data.get('lp_price_usd')),
+                        "price_usd_formatted": f"${safe_float(pool_data.get('lp_price_usd')):.6f}",
+                        "fees": {
+                            "lp_fee": pool_data.get('lp_fee', ''),
+                            "protocol_fee": pool_data.get('protocol_fee', ''),
+                            "total_fee_bps": f"{safe_float(pool_data.get('lp_fee', 0)) + safe_float(pool_data.get('protocol_fee', 0))}",
+                            "total_fee_percent": f"{(safe_float(pool_data.get('lp_fee', 0)) + safe_float(pool_data.get('protocol_fee', 0))) / 10000:.4f}%"
+                        }
+                    },
+                    "volume_ratio": (volume_24h_usd / lp_total_supply_usd * 100) if lp_total_supply_usd > 0 else 0,
+                    "volume_ratio_formatted": f"{(volume_24h_usd / lp_total_supply_usd * 100):.2f}%" if lp_total_supply_usd > 0 else "0%",
+                    "implied_daily_fees": volume_24h_usd * ((safe_float(pool_data.get('lp_fee', 0)) + safe_float(pool_data.get('protocol_fee', 0))) / 10000),
+                    "implied_daily_fees_formatted": f"${volume_24h_usd * ((safe_float(pool_data.get('lp_fee', 0)) + safe_float(pool_data.get('protocol_fee', 0))) / 10000):,.2f}"
                 },
-                "reserves": {
-                    "current": [round(reserve0, 2), round(reserve1, 2)],
-                    "new": [round(new_reserve0, 2), round(new_reserve1, 2)]
-                },
-                "interpretation": "Negative value means loss relative to holding" if impermanent_loss < 0 else "Positive value means gain"
-            }
-
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-
-    def analyze_wallet_portfolio(self, wallet_address: str) -> Dict[str, Any]:
-        try:
-            assets_data = self.components.get_wallet_assets(wallet_address)
-            pools_data = self.components.get_wallet_pools(wallet_address, dex_v2=True)
-            farms_data = self.components.get_wallet_farms(wallet_address, dex_v2=True, only_active=False)
-
-            assets = assets_data.get("asset_list", [])
-            pools = pools_data.get("pool_list", [])
-            farms = farms_data.get("farm_list", [])
-
-            asset_values = []
-            total_value = 0
-
-            for asset in assets:
-                balance = self._parse_amount(asset.get("balance", "0"))
-                dex_price = self._parse_amount(asset.get("dex_price_usd", "0"))
-
-                if dex_price > 0 and balance > 0:
-                    value = balance * dex_price
-                    asset_values.append({
-                        "address": asset.get("contract_address"),
-                        "symbol": asset.get("symbol", "UNKNOWN"),
-                        "balance": balance,
-                        "price": dex_price,
-                        "value": value
-                    })
-                    total_value += value
-
-            lp_positions = []
-            lp_value = 0
-
-            for pool in pools:
-                lp_balance = self._parse_amount(pool.get("lp_balance", "0"))
-                lp_price = self._parse_amount(pool.get("lp_price_usd", "0"))
-
-                if lp_price > 0 and lp_balance > 0:
-                    value = lp_balance * lp_price
-                    lp_positions.append({
-                        "pool_address": pool.get("address"),
-                        "tokens": [pool.get("token0_address"), pool.get("token1_address")],
-                        "lp_balance": lp_balance,
-                        "lp_price": lp_price,
-                        "value": value
-                    })
-                    lp_value += value
-
-            farm_positions = []
-            farm_value = 0
-
-            for farm in farms:
-                locked_lp = self._parse_amount(farm.get("locked_total_lp", "0"))
-                locked_lp_usd = self._parse_amount(farm.get("locked_total_lp_usd", "0"))
-
-                if locked_lp_usd > 0:
-                    farm_positions.append({
-                        "farm_address": farm.get("address"),
-                        "pool_address": farm.get("pool_address"),
-                        "locked_lp": locked_lp,
-                        "value": locked_lp_usd
-                    })
-                    farm_value += locked_lp_usd
-
-            total_portfolio = total_value + lp_value + farm_value
-
-            if total_portfolio > 0:
-                asset_allocation = (total_value / total_portfolio) * 100
-                lp_allocation = (lp_value / total_portfolio) * 100
-                farm_allocation = (farm_value / total_portfolio) * 100
-            else:
-                asset_allocation = lp_allocation = farm_allocation = 0
-
-            diversification_score = 0
-
-            if len(asset_values) >= 3:
-                diversification_score += 30
-
-            if len(lp_positions) >= 2:
-                diversification_score += 30
-
-            if len(farm_positions) >= 1:
-                diversification_score += 20
-
-            if total_portfolio > 1000:
-                diversification_score += 20
-
-            asset_values.sort(key=lambda x: x["value"], reverse=True)
-            lp_positions.sort(key=lambda x: x["value"], reverse=True)
-            farm_positions.sort(key=lambda x: x["value"], reverse=True)
-
-            return {
-                "success": True,
-                "wallet_address": wallet_address,
-                "portfolio_summary": {
-                    "total_value": round(total_portfolio, 2),
-                    "asset_value": round(total_value, 2),
-                    "lp_value": round(lp_value, 2),
-                    "farm_value": round(farm_value, 2),
-                    "asset_allocation": round(asset_allocation, 1),
-                    "lp_allocation": round(lp_allocation, 1),
-                    "farm_allocation": round(farm_allocation, 1)
-                },
-                "diversification_score": min(diversification_score, 100),
-                "holdings": {
-                    "assets_count": len(asset_values),
-                    "lp_positions_count": len(lp_positions),
-                    "farm_positions_count": len(farm_positions),
-                    "top_assets": asset_values[:5],
-                    "top_lp_positions": lp_positions[:3],
-                    "top_farm_positions": farm_positions[:3]
+                "metadata": {
+                    "deprecated": pool_data.get('deprecated', False),
+                    "popularity_index": pool_data.get('popularity_index', 0),
+                    "tags": pool_data.get('tags', []),
+                    "router_address": pool_data.get('router_address', '')
                 },
                 "timestamp": datetime.now().isoformat()
             }
 
+            print(f"✅ Pool analysis: {token0_symbol}/{token1_symbol}")
+            print(f"   Liquidity: ${lp_total_supply_usd:,.2f}")
+            print(f"   Volume 24h: ${volume_24h_usd:,.2f}")
+            print(f"   APY 30d: {apy_30d:.2f}%")
+            print(f"   Price: 1 {token1_symbol} = {price_token0_in_token1:.6f} {token0_symbol}")
+
         except Exception as e:
-            return {"success": False, "error": str(e)}
-
-    def get_swap_recommendations(self, offer_token: str, ask_token: str, amount: float) -> Dict[str, Any]:
-        try:
-            swap_data = self.components.simulate_swap(
-                offer_token, ask_token, str(amount), "0.005"
-            )
-
-            if "swap_rate" not in swap_data:
-                return {"success": False, "error": "Swap simulation failed"}
-
-            pools_data = self.components.get_pools_by_market(offer_token, ask_token)
-
-            alternative_pools = []
-            if "pool_list" in pools_data:
-                for pool in pools_data["pool_list"][:3]:
-                    pool_addr = pool.get("address")
-
-                    try:
-                        alt_swap = self.components.simulate_swap(
-                            offer_token, ask_token, str(amount), "0.005",
-                            pool_address=pool_addr
-                        )
-
-                        if "swap_rate" in alt_swap:
-                            swap_rate = self._parse_amount(alt_swap.get("swap_rate", "0"))
-                            price_impact = self._parse_amount(alt_swap.get("price_impact", "0"))
-
-                            alternative_pools.append({
-                                "pool_address": pool_addr,
-                                "swap_rate": swap_rate,
-                                "price_impact": price_impact,
-                                "router": alt_swap.get("router", {}).get("address")
-                            })
-                    except:
-                        continue
-
-            alternative_pools.sort(key=lambda x: x["swap_rate"], reverse=True)
-
-            return {
-                "success": True,
-                "offer_token": offer_token,
-                "ask_token": ask_token,
-                "amount": amount,
-                "recommended_swap": {
-                    "pool_address": swap_data.get("pool_address"),
-                    "router_address": swap_data.get("router_address"),
-                    "swap_rate": self._parse_amount(swap_data.get("swap_rate", "0")),
-                    "price_impact": self._parse_amount(swap_data.get("price_impact", "0")),
-                    "estimated_output": self._parse_amount(swap_data.get("ask_units", "0"))
-                },
-                "alternative_routes": alternative_pools,
-                "slippage_tolerance": swap_data.get("slippage_tolerance", "0.005"),
-                "recommended_slippage": swap_data.get("recommended_slippage_tolerance", "0.005"),
+            print(f"Error in pool analysis: {e}")
+            analysis = {
+                "success": False,
+                "error": f"Failed to analyze pool: {str(e)}",
                 "timestamp": datetime.now().isoformat()
             }
+            return StonFiDataValue(analysis)
 
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-
-    def calculate_apy_breakdown(self, farm_address: str) -> Dict[str, Any]:
-        try:
-            farm_data = self.components.get_farm(farm_address)
-
-            if "farm" not in farm_data:
-                return {"success": False, "error": "Invalid farm data"}
-
-            farm = farm_data["farm"]
-            rewards = farm.get("rewards", [])
-
-            apy_str = farm.get("apy", "0")
+        if analysis.get('success'):
             try:
-                apy = float(apy_str)
-            except:
-                apy = 0
+                stats_period_days = context.get('stats_period_days', 7)
+                since_str = (datetime.now() - timedelta(days=stats_period_days)).strftime('%Y-%m-%dT%H:%M:%S')
+                until_str = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
 
-            rewards_breakdown = []
-            total_rewards_value = 0
+                pool_stats = client.get_pool_stats(
+                    since=since_str,
+                    until=until_str,
+                    pool_address=pool_address
+                )
 
-            for reward in rewards:
-                token_address = reward.get("token_address")
-                daily_reward = self._parse_amount(reward.get("daily_reward", "0"))
+                if pool_stats and isinstance(pool_stats, dict) and 'stats' in pool_stats:
+                    stats_data = pool_stats['stats']
 
-                try:
-                    asset_data = self.components.get_asset(token_address)
-                    if "asset" in asset_data:
-                        token_price = self._parse_amount(asset_data["asset"].get("dex_price_usd", "0"))
-                        reward_value = daily_reward * token_price * 365
-                        total_rewards_value += reward_value
+                    total_base_volume = 0
+                    total_quote_volume = 0
+                    daily_stats = []
 
-                        rewards_breakdown.append({
-                            "token_address": token_address,
-                            "daily_reward": daily_reward,
-                            "token_price": token_price,
-                            "annual_value": reward_value
+                    for stat in stats_data:
+                        if isinstance(stat, dict):
+                            base_volume = safe_float(stat.get('base_volume', 0))
+                            quote_volume = safe_float(stat.get('quote_volume', 0))
+                            last_price = safe_float(stat.get('last_price', 0))
+                            base_liquidity = safe_float(stat.get('base_liquidity', 0))
+                            quote_liquidity = safe_float(stat.get('quote_liquidity', 0))
+                            apy = safe_float(stat.get('apy', 0)) * 100 if stat.get('apy') else 0
+
+                            total_base_volume += base_volume
+                            total_quote_volume += quote_volume
+
+                            base_symbol = stat.get('base_symbol', '')
+                            quote_symbol = stat.get('quote_symbol', '')
+
+                            base_name = stat.get('base_name', '')
+                            quote_name = stat.get('quote_name', '')
+
+                            daily_stats.append({
+                                "date": "N/A",
+                                "base_volume": base_volume,
+                                "base_volume_formatted": f"{base_volume:,.2f} {base_symbol}",
+                                "quote_volume": quote_volume,
+                                "quote_volume_formatted": f"{quote_volume:,.2f} {quote_symbol}",
+                                "total_volume_usd": (base_volume * token1_price_usd) + (quote_volume * token0_price_usd) if token0_price_usd and token1_price_usd else 0,
+                                "last_price": last_price,
+                                "last_price_formatted": f"1 {base_symbol} = {last_price:.6f} {quote_symbol}",
+                                "base_liquidity": base_liquidity,
+                                "quote_liquidity": quote_liquidity,
+                                "apy": apy,
+                                "apy_formatted": f"{apy:.2f}%" if apy else "N/A"
+                            })
+
+                    unique_wallets = pool_stats.get('unique_wallets_count', 0)
+
+                    total_volume_usd = 0
+                    if token0_price_usd and token1_price_usd:
+                        total_volume_usd = (total_base_volume * token1_price_usd) + (total_quote_volume * token0_price_usd)
+
+                    avg_daily_volume_usd = total_volume_usd / stats_period_days if stats_period_days > 0 else 0
+
+                    analysis["historical_stats"] = {
+                        "period_days": stats_period_days,
+                        "data_points": len(stats_data),
+                        "unique_wallets": unique_wallets,
+                        "total_base_volume": total_base_volume,
+                        "total_base_volume_formatted": f"{total_base_volume:,.2f} {stats_data[0].get('base_symbol', '') if stats_data else ''}",
+                        "total_quote_volume": total_quote_volume,
+                        "total_quote_volume_formatted": f"{total_quote_volume:,.2f} {stats_data[0].get('quote_symbol', '') if stats_data else ''}",
+                        "total_volume_usd": total_volume_usd,
+                        "total_volume_usd_formatted": f"${total_volume_usd:,.2f}" if total_volume_usd else "N/A",
+                        "avg_daily_base_volume": total_base_volume / stats_period_days if stats_period_days > 0 else 0,
+                        "avg_daily_quote_volume": total_quote_volume / stats_period_days if stats_period_days > 0 else 0,
+                        "avg_daily_volume_usd": avg_daily_volume_usd,
+                        "avg_daily_volume_usd_formatted": f"${avg_daily_volume_usd:,.2f}" if avg_daily_volume_usd else "N/A",
+                        "daily_stats": daily_stats[-min(7, len(daily_stats)):] if daily_stats else []
+                    }
+
+                    if stats_data and len(stats_data) > 0:
+                        latest_stat = stats_data[-1]
+                        analysis["historical_stats"].update({
+                            "latest_price": safe_float(latest_stat.get('last_price', 0)),
+                            "latest_price_formatted": f"1 {latest_stat.get('base_symbol', '')} = {safe_float(latest_stat.get('last_price', 0)):.6f} {latest_stat.get('quote_symbol', '')}",
+                            "latest_apy": safe_float(latest_stat.get('apy', 0)) * 100 if latest_stat.get('apy') else None,
+                            "base_token": {
+                                "symbol": latest_stat.get('base_symbol', ''),
+                                "name": latest_stat.get('base_name', ''),
+                                "address": latest_stat.get('base_id', '')
+                            },
+                            "quote_token": {
+                                "symbol": latest_stat.get('quote_symbol', ''),
+                                "name": latest_stat.get('quote_name', ''),
+                                "address": latest_stat.get('quote_id', '')
+                            }
                         })
-                except:
+
+                    print(f"   Historical stats: {len(stats_data)} data points")
+                    print(f"   Unique wallets: {unique_wallets}")
+                    print(f"   Total volume USD: ${total_volume_usd:,.2f}")
+                    print(f"   Avg daily volume: ${avg_daily_volume_usd:,.2f}")
+
+                else:
+                    print(f"   No historical stats data available")
+                    analysis["historical_stats"] = {
+                        "available": False,
+                        "note": "No historical data structure found in API response"
+                    }
+
+            except Exception as stats_error:
+                print(f"Error fetching historical stats: {stats_error}")
+                analysis["historical_stats_error"] = str(stats_error)
+                analysis["historical_stats"] = {
+                    "available": False,
+                    "note": f"Error: {str(stats_error)}"
+                }
+
+        return StonFiDataValue(analysis)
+
+    except Exception as e:
+        print(f"Error in comprehensive_pool_analysis_skill: {e}")
+        result = {"success": False, "error": str(e)}
+        return StonFiDataValue(result)
+
+def wallet_info_skill(context: Dict[str, Any]) -> StonFiDataValue:
+    print("Starting wallet_info_skill...")
+
+    wallet_address = context.get('wallet_address')
+    if not wallet_address:
+        result = {
+            "success": False, 
+            "error": "Wallet address is required",
+            "timestamp": datetime.now().isoformat()
+        }
+        return StonFiDataValue(result)
+
+    print(f"Analyzing wallet: {wallet_address[:12]}...")
+
+    try:
+        client = context.get('stonfi_client')
+        if not client:
+            result = {
+                "success": False, 
+                "error": "StonFi client not available",
+                "timestamp": datetime.now().isoformat()
+            }
+            return StonFiDataValue(result)
+
+        wallet_data = {
+            "wallet_address": wallet_address,
+            "wallet_short": f"{wallet_address[:8]}...{wallet_address[-6:]}",
+            "address_type": "UQ" if wallet_address.startswith('UQ') else "EQ" if wallet_address.startswith('EQ') else "Other",
+            "analysis_timestamp": datetime.now().isoformat(),
+            "included_sections": []
+        }
+
+        total_value = 0
+
+        include_assets = context.get('include_assets', True)
+        if include_assets:
+            print(f"   Fetching wallet assets...")
+            try:
+                assets_response = client.get_wallet_assets(wallet_address)
+
+                if assets_response and isinstance(assets_response, dict):
+                    asset_list = assets_response.get('asset_list', [])
+
+                    if asset_list:
+                        valuable_assets = []
+                        assets_with_balance = []
+                        assets_without_balance = []
+                        assets_value = 0
+
+                        for asset in asset_list:
+                            if not isinstance(asset, dict):
+                                continue
+
+                            symbol = asset.get('symbol', 'UNKNOWN')
+                            contract_address = asset.get('contract_address', '')
+                            balance_str = asset.get('balance', '0')
+                            decimals = int(asset.get('decimals', 9))
+                            display_name = asset.get('display_name', symbol)
+                            kind = asset.get('kind', 'N/A')
+
+                            has_balance = 'balance' in asset and balance_str != '0'
+
+                            price = None
+                            price_source = None
+                            price_fields = [
+                                ('dex_price_usd', 'DEX'),
+                                ('dex_usd_price', 'DEX'), 
+                                ('third_party_price_usd', 'Third Party'),
+                                ('third_party_usd_price', 'Third Party')
+                            ]
+
+                            for price_field, source in price_fields:
+                                if price_field in asset and asset[price_field]:
+                                    try:
+                                        price = float(asset[price_field])
+                                        price_source = source
+                                        break
+                                    except:
+                                        continue
+
+                            usd_value = 0
+                            if price and has_balance:
+                                try:
+                                    balance_num = float(balance_str) / (10 ** decimals)
+                                    usd_value = balance_num * price
+                                except:
+                                    pass
+
+                            balance_readable = ""
+                            if has_balance:
+                                try:
+                                    balance_num = float(balance_str) / (10 ** decimals)
+                                    if balance_num >= 1000:
+                                        balance_readable = f"{balance_num:,.0f}"
+                                    elif balance_num >= 1:
+                                        balance_readable = f"{balance_num:,.2f}"
+                                    elif balance_num >= 0.01:
+                                        balance_readable = f"{balance_num:,.4f}"
+                                    else:
+                                        balance_readable = f"{balance_num:,.6f}"
+                                except:
+                                    balance_readable = balance_str
+
+                            asset_info = {
+                                "symbol": symbol,
+                                "name": display_name,
+                                "contract_address": contract_address,
+                                "contract_short": f"{contract_address[:8]}...{contract_address[-6:]}" if contract_address else "",
+                                "wallet_address": asset.get('wallet_address', ''),
+                                "balance": balance_str,
+                                "balance_readable": balance_readable,
+                                "decimals": decimals,
+                                "kind": kind,
+                                "price": price,
+                                "price_formatted": f"${price:,.6f}" if price else "N/A",
+                                "price_source": price_source,
+                                "usd_value": usd_value,
+                                "usd_value_formatted": f"${usd_value:,.2f}" if usd_value > 0 else "$0.00",
+                                "has_balance": has_balance,
+                                "image_url": asset.get('image_url', ''),
+                                "tags": asset.get('tags', []),
+                                "popularity_index": asset.get('popularity_index'),
+                                "priority": asset.get('priority', 0),
+                                "deprecated": asset.get('deprecated', False),
+                                "community": asset.get('community', False),
+                                "blacklisted": asset.get('blacklisted', False)
+                            }
+
+                            min_asset_value = context.get('min_asset_value', 0.01)
+
+                            if has_balance:
+                                assets_with_balance.append(asset_info)
+                                if usd_value >= min_asset_value:
+                                    valuable_assets.append(asset_info)
+                                    assets_value += usd_value
+                            else:
+                                assets_without_balance.append(asset_info)
+
+                        wallet_data["assets_statistics"] = {
+                            "total_assets_in_list": len(asset_list),
+                            "assets_with_balance": len(assets_with_balance),
+                            "assets_without_balance": len(assets_without_balance),
+                            "valuable_assets": len(valuable_assets)
+                        }
+
+                        if valuable_assets:
+                            valuable_assets.sort(key=lambda x: x['usd_value'], reverse=True)
+                            wallet_data["assets"] = valuable_assets
+                            wallet_data["assets_count"] = len(valuable_assets)
+                            wallet_data["assets_total_value"] = assets_value
+                            wallet_data["assets_total_formatted"] = f"${assets_value:,.2f}"
+                            wallet_data["included_sections"].append("assets")
+                            total_value += assets_value
+
+                            top_assets = valuable_assets[:3]
+                            wallet_data["top_assets"] = [
+                                {
+                                    "symbol": a["symbol"],
+                                    "value": a["usd_value_formatted"],
+                                    "balance": a["balance_readable"]
+                                }
+                                for a in top_assets
+                            ]
+
+                            print(f"   ✅ Found {len(valuable_assets)} valuable assets worth ${assets_value:,.2f}")
+                            print(f"      Top asset: {top_assets[0]['symbol']} - {top_assets[0]['usd_value_formatted']}")
+                        else:
+                            wallet_data["assets"] = []
+                            wallet_data["assets_count"] = 0
+                            wallet_data["assets_total_value"] = 0
+                            print(f"   ℹ️ No valuable assets found (min: ${min_asset_value})")
+
+                        if assets_with_balance:
+                            wallet_data["all_assets_with_balance"] = assets_with_balance
+                    else:
+                        wallet_data["assets"] = []
+                        wallet_data["assets_count"] = 0
+                        wallet_data["assets_total_value"] = 0
+                        print(f"   ℹ️ No asset data received")
+                else:
+                    wallet_data["assets_error"] = "Invalid assets response"
+                    wallet_data["assets"] = []
+                    wallet_data["assets_count"] = 0
+                    print(f"   ❌ Invalid assets response")
+
+            except Exception as e:
+                error_msg = str(e)
+                wallet_data["assets_error"] = error_msg
+                wallet_data["assets"] = []
+                wallet_data["assets_count"] = 0
+                print(f"   ❌ Assets API error: {error_msg}")
+
+        include_pools = context.get('include_pools', True)
+        if include_pools:
+            print(f"   Fetching liquidity pools...")
+            try:
+                pools_response = client.get_wallet_pools(wallet_address, dex_v2=True)
+
+                if pools_response and isinstance(pools_response, dict):
+                    pools_list = pools_response.get('pools', [])
+
+                    if pools_list:
+                        lp_positions = []
+                        pools_value = 0
+
+                        for pool in pools_list:
+                            if not isinstance(pool, dict):
+                                continue
+
+                            lp_usd_value = 0
+                            for value_field in ['lp_usd_value', 'usd_value', 'total_usd']:
+                                if value_field in pool:
+                                    try:
+                                        lp_usd_value = float(pool[value_field])
+                                        break
+                                    except:
+                                        continue
+
+                            if lp_usd_value > 0:
+                                token0_symbol = pool.get('token0_symbol', 'UNKNOWN')
+                                token1_symbol = pool.get('token1_symbol', 'UNKNOWN')
+                                token0_address = pool.get('token0_address', '')
+                                token1_address = pool.get('token1_address', '')
+
+                                lp_info = {
+                                    "pool_address": pool.get('pool_address', ''),
+                                    "pool_short": f"{pool.get('pool_address', '')[:8]}...{pool.get('pool_address', '')[-6:]}",
+                                    "tokens": f"{token0_symbol}/{token1_symbol}",
+                                    "token0": {
+                                        "symbol": token0_symbol,
+                                        "address": token0_address,
+                                        "address_short": f"{token0_address[:6]}...{token0_address[-4:]}" if token0_address else ""
+                                    },
+                                    "token1": {
+                                        "symbol": token1_symbol,
+                                        "address": token1_address,
+                                        "address_short": f"{token1_address[:6]}...{token1_address[-4:]}" if token1_address else ""
+                                    },
+                                    "lp_balance": pool.get('lp_balance', '0'),
+                                    "lp_usd_value": lp_usd_value,
+                                    "lp_usd_formatted": f"${lp_usd_value:,.2f}",
+                                    "share_percentage": pool.get('share_percentage', '0'),
+                                    "protocol_fee": pool.get('protocol_fee', '0'),
+                                    "lp_fee": pool.get('lp_fee', '0'),
+                                    "reserve0": pool.get('reserve0', '0'),
+                                    "reserve1": pool.get('reserve1', '0')
+                                }
+
+                                lp_positions.append(lp_info)
+                                pools_value += lp_usd_value
+
+                        if lp_positions:
+                            lp_positions.sort(key=lambda x: x['lp_usd_value'], reverse=True)
+                            wallet_data["lp_positions"] = lp_positions
+                            wallet_data["lp_positions_count"] = len(lp_positions)
+                            wallet_data["lp_total_value"] = pools_value
+                            wallet_data["lp_total_formatted"] = f"${pools_value:,.2f}"
+                            wallet_data["included_sections"].append("liquidity_pools")
+                            total_value += pools_value
+
+                            top_pools = lp_positions[:3]
+                            wallet_data["top_lp_positions"] = [
+                                {
+                                    "pair": p["tokens"],
+                                    "value": p["lp_usd_formatted"],
+                                    "share": f"{p['share_percentage']}%"
+                                }
+                                for p in top_pools
+                            ]
+
+                            print(f"   ✅ Found {len(lp_positions)} LP positions worth ${pools_value:,.2f}")
+                        else:
+                            wallet_data["lp_positions"] = []
+                            wallet_data["lp_positions_count"] = 0
+                            wallet_data["lp_total_value"] = 0
+                            print(f"   ℹ️ No LP positions found")
+                    else:
+                        wallet_data["lp_positions"] = []
+                        wallet_data["lp_positions_count"] = 0
+                        wallet_data["lp_total_value"] = 0
+                        print(f"   ℹ️ No LP data")
+                else:
+                    wallet_data["pools_error"] = "Invalid pools response"
+                    wallet_data["lp_positions"] = []
+                    wallet_data["lp_positions_count"] = 0
+                    print(f"   ❌ Invalid pools response")
+
+            except Exception as e:
+                wallet_data["pools_error"] = str(e)
+                wallet_data["lp_positions"] = []
+                wallet_data["lp_positions_count"] = 0
+                print(f"   ❌ Pools API error: {e}")
+
+        include_farms = context.get('include_farms', True)
+        if include_farms:
+            print(f"   Fetching farming positions...")
+            try:
+                farms_response = client.get_wallet_farms(wallet_address, dex_v2=True, only_active=True)
+
+                if farms_response and isinstance(farms_response, dict):
+                    farms_list = farms_response.get('farms', [])
+
+                    if farms_list:
+                        farming_positions = []
+                        farms_value = 0
+
+                        for farm in farms_list:
+                            if not isinstance(farm, dict):
+                                continue
+
+                            staked_usd = 0
+                            for value_field in ['staked_usd_value', 'usd_value', 'total_usd']:
+                                if value_field in farm:
+                                    try:
+                                        staked_usd = float(farm[value_field])
+                                        break
+                                    except:
+                                        continue
+
+                            if staked_usd > 0:
+                                farm_info = {
+                                    "farm_address": farm.get('farm_address', ''),
+                                    "farm_short": f"{farm.get('farm_address', '')[:8]}...{farm.get('farm_address', '')[-6:]}",
+                                    "pool_tokens": farm.get('pool_tokens', 'N/A'),
+                                    "staked_amount": farm.get('staked_amount', '0'),
+                                    "staked_usd_value": staked_usd,
+                                    "staked_usd_formatted": f"${staked_usd:,.2f}",
+                                    "apr": farm.get('apr', '0'),
+                                    "apr_formatted": f"{farm.get('apr', '0')}%",
+                                    "pending_rewards": farm.get('pending_rewards', '0'),
+                                    "reward_token": farm.get('reward_token', ''),
+                                    "is_active": farm.get('is_active', True)
+                                }
+
+                                farming_positions.append(farm_info)
+                                farms_value += staked_usd
+
+                        if farming_positions:
+                            wallet_data["farming_positions"] = farming_positions
+                            wallet_data["farming_positions_count"] = len(farming_positions)
+                            wallet_data["farming_total_value"] = farms_value
+                            wallet_data["farming_total_formatted"] = f"${farms_value:,.2f}"
+                            wallet_data["included_sections"].append("farming")
+                            total_value += farms_value
+
+                            print(f"   ✅ Found {len(farming_positions)} farming positions worth ${farms_value:,.2f}")
+                        else:
+                            wallet_data["farming_positions"] = []
+                            wallet_data["farming_positions_count"] = 0
+                            wallet_data["farming_total_value"] = 0
+                            print(f"   ℹ️ No farming positions found")
+                    else:
+                        wallet_data["farming_positions"] = []
+                        wallet_data["farming_positions_count"] = 0
+                        wallet_data["farming_total_value"] = 0
+                        print(f"   ℹ️ No farming data")
+                else:
+                    wallet_data["farms_error"] = "Invalid farms response"
+                    wallet_data["farming_positions"] = []
+                    wallet_data["farming_positions_count"] = 0
+                    print(f"   ❌ Invalid farms response")
+
+            except Exception as e:
+                wallet_data["farms_error"] = str(e)
+                wallet_data["farming_positions"] = []
+                wallet_data["farming_positions_count"] = 0
+                print(f"   ❌ Farms API error: {e}")
+
+        include_stakes = context.get('include_stakes', True)
+        if include_stakes:
+            print(f"   Fetching stakes...")
+            try:
+                stakes_response = client.get_wallet_stakes(wallet_address)
+
+                if stakes_response and isinstance(stakes_response, dict):
+                    stakes_list = stakes_response.get('stakes', [])
+
+                    if stakes_list:
+                        wallet_data["staking_positions"] = stakes_list[:10]
+                        wallet_data["staking_count"] = len(stakes_list)
+                        wallet_data["included_sections"].append("staking")
+                        print(f"   ✅ Found {len(stakes_list)} staking positions")
+                    else:
+                        wallet_data["staking_positions"] = []
+                        wallet_data["staking_count"] = 0
+                        print(f"   ℹ️ No stakes found")
+                else:
+                    wallet_data["staking_error"] = "Invalid stakes response"
+                    wallet_data["staking_positions"] = []
+                    print(f"   ❌ Invalid stakes response")
+
+            except Exception as e:
+                wallet_data["staking_error"] = str(e)
+                wallet_data["staking_positions"] = []
+                print(f"   ❌ Stakes API error: {e}")
+
+        wallet_data["total_wallet_value"] = total_value
+        wallet_data["total_wallet_formatted"] = f"${total_value:,.2f}"
+
+        wallet_data["value_by_category"] = {}
+        if wallet_data.get('assets_count', 0) > 0:
+            wallet_data["value_by_category"]["assets"] = wallet_data.get('assets_total_formatted', '$0')
+        if wallet_data.get('lp_positions_count', 0) > 0:
+            wallet_data["value_by_category"]["liquidity_pools"] = wallet_data.get('lp_total_formatted', '$0')
+        if wallet_data.get('farming_positions_count', 0) > 0:
+            wallet_data["value_by_category"]["farming"] = wallet_data.get('farming_total_formatted', '$0')
+        wallet_data["value_by_category"]["total"] = wallet_data["total_wallet_formatted"]
+
+        if total_value > 0:
+            wallet_data["percentage_distribution"] = {}
+            if wallet_data.get('assets_total_value', 0) > 0:
+                wallet_data["percentage_distribution"]["assets"] = f"{(wallet_data['assets_total_value'] / total_value * 100):.1f}%"
+            if wallet_data.get('lp_total_value', 0) > 0:
+                wallet_data["percentage_distribution"]["liquidity_pools"] = f"{(wallet_data['lp_total_value'] / total_value * 100):.1f}%"
+            if wallet_data.get('farming_total_value', 0) > 0:
+                wallet_data["percentage_distribution"]["farming"] = f"{(wallet_data['farming_total_value'] / total_value * 100):.1f}%"
+
+        wallet_size = ""
+        if total_value == 0:
+            wallet_size = "empty"
+        elif total_value < 10:
+            wallet_size = "very_small"
+        elif total_value < 100:
+            wallet_size = "small"
+        elif total_value < 1000:
+            wallet_size = "medium"
+        elif total_value < 10000:
+            wallet_size = "large"
+        else:
+            wallet_size = "very_large"
+
+        wallet_data["wallet_size"] = wallet_size
+        wallet_data["wallet_size_label"] = {
+            "empty": "Empty",
+            "very_small": "Very small (<$10)",
+            "small": "Small ($10-$100)", 
+            "medium": "Medium ($100-$1,000)",
+            "large": "Large ($1,000-$10,000)",
+            "very_large": "Very large (>$10,000)"
+        }[wallet_size]
+
+        wallet_data["success"] = True
+        print(f"✅ Wallet analysis complete")
+        print(f"   Total wallet value: ${total_value:,.2f}")
+
+        return StonFiDataValue(wallet_data)
+
+    except Exception as e:
+        print(f"❌ Error in wallet analysis: {e}")
+        result = {
+            "success": False, 
+            "error": f"Wallet analysis failed: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }
+        return StonFiDataValue(result)
+
+def arbitrage_finder_skill(context: Dict[str, Any]) -> StonFiDataValue:
+    print("Searching for arbitrage opportunities...")
+
+    min_profit = context.get('min_profit_percentage', 0.1)
+    max_tokens = context.get('max_tokens_to_analyze', 20)
+    base_token_address = context.get('base_token', 'EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c')
+    user_tokens = context.get('tokens_to_analyze', [])
+    min_pool_liquidity = context.get('min_pool_liquidity', 1000)
+    max_route_length = context.get('max_route_length', 3)
+
+    print(f"Analysis parameters:")
+    print(f"   Base token: TON")
+    print(f"   Minimum profit: {min_profit}%")
+    print(f"   Tokens to analyze: {len(user_tokens)}")
+    print(f"   Minimum pool liquidity: ${min_pool_liquidity}")
+    print(f"   Maximum chain length: {max_route_length}")
+
+    try:
+        client = context.get('stonfi_client')
+        if not client:
+            return StonFiDataValue({"success": False, "error": "STON.FI client not available"})
+
+        print(f"Step 1: Getting token information...")
+
+        tokens_info = []
+        tokens_to_check = user_tokens[:max_tokens]
+
+        for i, token_address in enumerate(tokens_to_check, 1):
+            try:
+                asset = client.get_asset(token_address)
+                if asset and 'asset' in asset:
+                    symbol = asset['asset'].get('symbol', f'TOKEN_{i}')
+                    tokens_info.append({
+                        'address': token_address,
+                        'symbol': symbol,
+                        'display_name': f"{symbol} ({token_address[:8]}...)"
+                    })
+                    print(f"   [{i}/{len(tokens_to_check)}] {symbol}")
+                else:
+                    tokens_info.append({
+                        'address': token_address,
+                        'symbol': f'TOKEN_{i}',
+                        'display_name': f"TOKEN_{i} ({token_address[:8]}...)"
+                    })
+                    print(f"   [{i}/{len(tokens_to_check)}] TOKEN_{i} (basic)")
+            except Exception as e:
+                print(f"   [{i}/{len(tokens_to_check)}] Error: {str(e)[:50]}...")
+                continue
+
+        print(f"   ✓ Loaded: {len(tokens_info)} tokens")
+
+        if len(tokens_info) < 3:
+            return StonFiDataValue({
+                "success": False,
+                "error": f"Insufficient tokens. Minimum 3 required, found: {len(tokens_info)}"
+            })
+
+        print(f"Step 2: Getting exchange rates TON ↔ Tokens...")
+
+        ton_to_token_rates = {}
+        token_to_ton_rates = {}
+        pool_infos = {}
+
+        for token in tokens_info:
+            try:
+                pools_response = client.get_pools_by_market(base_token_address, token['address'])
+
+                if not pools_response or 'pool_list' not in pools_response:
+                    print(f"   ✗ {token['symbol']}: pools not found")
                     continue
 
-            locked_lp_usd = self._parse_amount(farm.get("locked_total_lp_usd", "0"))
+                pools = pools_response['pool_list']
+                if not pools:
+                    print(f"   ✗ {token['symbol']}: pool list empty")
+                    continue
 
-            calculated_apy = 0
-            if locked_lp_usd > 0:
-                calculated_apy = (total_rewards_value / locked_lp_usd) * 100
+                pool = pools[0]
 
-            pool_address = farm.get("pool_address")
-            pool_apy = 0
-            if pool_address:
+                liquidity = float(pool.get('lp_total_supply_usd', 0))
+                if liquidity < min_pool_liquidity:
+                    print(f"   ⚠ {token['symbol']}: low liquidity (${liquidity:,.0f})")
+                    continue
+
+                token0_address = pool.get('token0_address', '')
+                reserve0 = float(pool.get('reserve0', 0))
+                reserve1 = float(pool.get('reserve1', 0))
+
+                if reserve0 <= 0 or reserve1 <= 0:
+                    print(f"   ✗ {token['symbol']}: zero reserves")
+                    continue
+
+                if token0_address == base_token_address:
+                    ton_to_token_rate = reserve1 / reserve0
+                    token_to_ton_rate = reserve0 / reserve1
+                else:
+                    ton_to_token_rate = reserve0 / reserve1
+                    token_to_ton_rate = reserve1 / reserve0
+
+                if ton_to_token_rate <= 0 or token_to_ton_rate <= 0:
+                    print(f"   ✗ {token['symbol']}: incorrect rate")
+                    continue
+
+                ton_to_token_rates[token['symbol']] = ton_to_token_rate
+                token_to_ton_rates[token['symbol']] = token_to_ton_rate
+                pool_infos[token['symbol']] = {
+                    'liquidity': liquidity,
+                    'reserve0': reserve0,
+                    'reserve1': reserve1,
+                    'rate_field': pool.get('rate', 'N/A')
+                }
+
+                rate_display = f"{ton_to_token_rate:.10f}".rstrip('0').rstrip('.')
+                if '.' in rate_display and len(rate_display.split('.')[1]) > 6:
+                    rate_display = f"{ton_to_token_rate}"
+
+                print(f"   ✓ TON/{token['symbol']}: {rate_display} (liq.: ${liquidity:,.0f})")
+
+            except Exception as e:
+                print(f"   ✗ {token['symbol']}: error - {str(e)[:50]}...")
+                continue
+
+        print(f"   Statistics:")
+        print(f"   Pairs successfully obtained: {len(ton_to_token_rates)}")
+        print(f"   Tokens skipped: {len(tokens_info) - len(ton_to_token_rates)}")
+
+        if len(ton_to_token_rates) < 3:
+            return StonFiDataValue({
+                "success": False,
+                "error": f"Insufficient valid pairs. Found: {len(ton_to_token_rates)}, minimum 3 required",
+                "debug_info": {
+                    "total_tokens": len(tokens_info),
+                    "valid_pairs": len(ton_to_token_rates),
+                    "token_symbols": [t['symbol'] for t in tokens_info],
+                    "valid_symbols": list(ton_to_token_rates.keys())
+                }
+            })
+
+        print(f"Step 3: Searching for arbitrage opportunities (max length: {max_route_length})...")
+
+        arbitrage_opportunities = []
+
+        token_symbols = list(ton_to_token_rates.keys())
+
+        for i in range(len(token_symbols)):
+            for j in range(len(token_symbols)):
+                if i == j:
+                    continue
+
+                token_a = token_symbols[i]
+                token_b = token_symbols[j]
+
                 try:
-                    pool_data = self.components.get_pool(pool_address)
-                    if "pool" in pool_data:
-                        pool_apy = self._parse_amount(pool_data["pool"].get("apy_30d", "0")) * 100
-                except:
-                    pass
+                    token_a_address = next(t['address'] for t in tokens_info if t['symbol'] == token_a)
+                    token_b_address = next(t['address'] for t in tokens_info if t['symbol'] == token_b)
 
-            total_apy = pool_apy + calculated_apy
+                    ab_pools_response = client.get_pools_by_market(token_a_address, token_b_address)
 
-            return {
-                "success": True,
-                "farm_address": farm_address,
-                "pool_address": pool_address,
-                "apy_breakdown": {
-                    "reported_apy": round(apy, 2),
-                    "calculated_apy": round(calculated_apy, 2),
-                    "pool_apy": round(pool_apy, 2),
-                    "total_apy": round(total_apy, 2)
-                },
-                "rewards": rewards_breakdown,
-                "staking_metrics": {
-                    "locked_lp_usd": round(locked_lp_usd, 2),
-                    "total_rewards_value": round(total_rewards_value, 2),
-                    "min_stake_duration": farm.get("min_stake_duration_s", "0")
-                },
-                "farm_status": farm.get("status", "Unknown"),
+                    if not ab_pools_response or 'pool_list' not in ab_pools_response:
+                        continue
+
+                    ab_pools = ab_pools_response['pool_list']
+                    if not ab_pools:
+                        continue
+
+                    ab_pool = ab_pools[0]
+
+                    ab_liquidity = float(ab_pool.get('lp_total_supply_usd', 0))
+                    if ab_liquidity < min_pool_liquidity:
+                        continue
+
+                    ab_token0 = ab_pool.get('token0_address', '')
+                    ab_reserve0 = float(ab_pool.get('reserve0', 0))
+                    ab_reserve1 = float(ab_pool.get('reserve1', 0))
+
+                    if ab_reserve0 <= 0 or ab_reserve1 <= 0:
+                        continue
+
+                    if ab_token0 == token_a_address:
+                        a_to_b_rate = ab_reserve1 / ab_reserve0
+                        b_to_a_rate = ab_reserve0 / ab_reserve1
+                    else:
+                        a_to_b_rate = ab_reserve0 / ab_reserve1
+                        b_to_a_rate = ab_reserve1 / ab_reserve0
+
+                    if a_to_b_rate <= 0:
+                        continue
+
+                    cycle_profit = (
+                        ton_to_token_rates[token_a] *
+                        a_to_b_rate *
+                        token_to_ton_rates[token_b]
+                    )
+
+                    profit_percent = (cycle_profit - 1) * 100
+
+                    reverse_profit = (
+                        ton_to_token_rates[token_b] *
+                        b_to_a_rate *
+                        token_to_ton_rates[token_a]
+                    )
+
+                    reverse_profit_percent = (reverse_profit - 1) * 100
+
+                    if profit_percent >= reverse_profit_percent:
+                        final_cycle = ['TON', token_a, token_b, 'TON']
+                        final_profit = profit_percent
+                        rates = [
+                            ton_to_token_rates[token_a],
+                            a_to_b_rate,
+                            token_to_ton_rates[token_b]
+                        ]
+                        best_direction = "forward"
+                    else:
+                        final_cycle = ['TON', token_b, token_a, 'TON']
+                        final_profit = reverse_profit_percent
+                        rates = [
+                            ton_to_token_rates[token_b],
+                            b_to_a_rate,
+                            token_to_ton_rates[token_a]
+                        ]
+                        best_direction = "reverse"
+
+                    if final_profit >= min_profit:
+                        rate_display_list = []
+                        for idx, rate in enumerate(rates):
+                            if idx == 0:
+                                from_token = final_cycle[0]
+                                to_token = final_cycle[1]
+                            elif idx == 1:
+                                from_token = final_cycle[1]
+                                to_token = final_cycle[2]
+                            else:
+                                from_token = final_cycle[2]
+                                to_token = final_cycle[3]
+
+                            if rate < 0.000001:
+                                rate_str = f"{rate:.10f}".rstrip('0').rstrip('.')
+                            elif rate < 1:
+                                rate_str = f"{rate:.6f}".rstrip('0').rstrip('.')
+                            else:
+                                rate_str = f"{rate:.4f}".rstrip('0').rstrip('.')
+
+                            rate_display_list.append({
+                                'from': from_token,
+                                'to': to_token,
+                                'rate': rate,
+                                'display': rate_str
+                            })
+
+                        arbitrage_opportunities.append({
+                            'cycle': final_cycle,
+                            'profit_percentage': final_profit,
+                            'profit_percentage_formatted': f"{final_profit:.4f}%",
+                            'cycle_profit_ratio': cycle_profit if best_direction == "forward" else reverse_profit,
+                            'rates': rate_display_list,
+                            'liquidity': min(
+                                pool_infos.get(token_a, {}).get('liquidity', 0),
+                                pool_infos.get(token_b, {}).get('liquidity', 0),
+                                ab_liquidity
+                            ),
+                            'type': 'triangular',
+                            'direction': best_direction,
+                            'route_length': 3
+                        })
+
+                        print(f"   Found opportunity: {' → '.join(final_cycle)} ({final_profit:.2f}%)")
+
+                except Exception as e:
+                    continue
+
+        if max_route_length > 3:
+            print(f"   Additional search for chains up to {max_route_length} steps...")
+            print(f"   ⚠ Search for chains >3 steps temporarily not implemented")
+
+        arbitrage_opportunities.sort(key=lambda x: x['profit_percentage'], reverse=True)
+
+        unique_opportunities = []
+        seen_cycles = set()
+
+        for opp in arbitrage_opportunities:
+            cycle_str = '->'.join(opp['cycle'])
+            if cycle_str not in seen_cycles:
+                seen_cycles.add(cycle_str)
+                unique_opportunities.append(opp)
+
+        arbitrage_opportunities = unique_opportunities[:10]
+
+        print(f"\n" + "="*50)
+        print(f"ARBITRAGE ANALYSIS RESULTS")
+        print(f"="*50)
+
+        result = {
+            "success": True,
+            "analysis": {
+                "base_token": "TON",
+                "tokens_analyzed": len(tokens_info),
+                "valid_pairs_found": len(ton_to_token_rates),
+                "min_profit_threshold": f"{min_profit}%",
+                "min_liquidity_threshold": f"${min_pool_liquidity}",
+                "max_route_length": max_route_length,
                 "timestamp": datetime.now().isoformat()
+            },
+            "arbitrage_opportunities": arbitrage_opportunities,
+            "summary": {
+                "total_opportunities": len(arbitrage_opportunities),
+                "max_profit": f"{arbitrage_opportunities[0]['profit_percentage_formatted']}" if arbitrage_opportunities else "0%",
+                "profitable_cycles": len([o for o in arbitrage_opportunities if o['profit_percentage'] > 0]),
+                "cycles_by_length": {
+                    "triangular": len([o for o in arbitrage_opportunities if o['route_length'] == 3])
+                }
             }
+        }
 
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        print(f"\nGENERAL STATISTICS:")
+        print(f"   • Tokens analyzed: {len(tokens_info)}")
+        print(f"   • Successful TON/token pairs: {len(ton_to_token_rates)}")
+        print(f"   • Opportunities found: {len(arbitrage_opportunities)}")
+        print(f"   • Maximum chain length in search: {max_route_length}")
+
+        if arbitrage_opportunities:
+            print(f"\nARBITRAGE OPPORTUNITIES:")
+
+            for idx, opp in enumerate(arbitrage_opportunities[:5], 1):
+                print(f"\n   {idx}. Profit: {opp['profit_percentage_formatted']}")
+                print(f"      Cycle length: {opp.get('route_length', len(opp['cycle']) - 1)} steps")
+                print(f"      Path: {' → '.join(opp['cycle'])}")
+                print(f"      Type: {opp['type']}")
+
+                if 'rates' in opp and isinstance(opp['rates'], list):
+                    print(f"      Exchange rates:")
+                    for rate_info in opp['rates']:
+                        if isinstance(rate_info, dict):
+                            from_token = rate_info.get('from', '')
+                            to_token = rate_info.get('to', '')
+                            rate_display = rate_info.get('display', '')
+                            print(f"        • {from_token} → {to_token}: {rate_display}")
+                        else:
+                            print(f"        • Rate: {rate_info}")
+
+                if opp['profit_percentage'] > 0:
+                    gas_estimate = opp.get('route_length', 3) * 0.1
+                    min_amount = gas_estimate / (opp['profit_percentage'] / 100)
+                    print(f"      Min amount for profit: ~{min_amount:.2f} TON")
+
+                    liquidity = opp.get('liquidity', 0)
+                    if liquidity < 500:
+                        print(f"      ⚠ Warning: low liquidity (${liquidity:,.0f})")
+                    elif liquidity < 2000:
+                        print(f"      ⚠ Average liquidity (${liquidity:,.0f})")
+                    else:
+                        print(f"      ✅ Normal liquidity (${liquidity:,.0f})")
+        else:
+            print(f"\nARBITRAGE OPPORTUNITIES NOT FOUND")
+            print(f"   Market shows high efficiency")
+
+            print(f"\nRECOMMENDATIONS:")
+            print(f"   1. Decrease min_profit_percentage to 0.05%")
+            print(f"   2. Decrease min_pool_liquidity to $50")
+            if max_route_length <= 3:
+                print(f"   3. Increase max_route_length to 4-5 for longer chains")
+            print(f"   4. Try during high volatility periods")
+
+        print(f"\nTOP TOKENS BY LIQUIDITY:")
+        if pool_infos:
+            token_liquidity = [(symbol, info['liquidity']) for symbol, info in pool_infos.items()]
+            token_liquidity.sort(key=lambda x: x[1], reverse=True)
+
+            for symbol, liquidity in token_liquidity[:5]:
+                print(f"   • {symbol}: ${liquidity:,.0f}")
+        else:
+            print(f"   No liquidity data")
+
+        print(f"\nAnalysis completed: {datetime.now().strftime('%H:%M:%S')}")
+
+        return StonFiDataValue(result)
+
+    except Exception as e:
+        print(f"\nCRITICAL ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
+
+        return StonFiDataValue({
+            "success": False,
+            "error": f"Analysis error: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        })

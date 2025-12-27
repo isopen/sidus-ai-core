@@ -1,17 +1,30 @@
 import requests
 import time
-from typing import Optional, List, Dict, Any
+from typing import Optional
 
-class StonFiComponents:
+class StonFiClientComponent:
     BASE_API_VERSION = "v1"
 
-    def __init__(self):
+    def __init__(self, api_key: Optional[str] = None):
         self.base_url = "https://api.ston.fi"
+        self.api_key = api_key
         self.session = requests.Session()
         self.last_request_time = 0
         self.request_delay = 0.1
 
-    def _bool_to_str(self, value: bool) -> str:
+        if self.api_key:
+            self.session.headers.update({
+                'Authorization': f'Bearer {self.api_key}'
+            })
+
+    def test_connection(self):
+        try:
+            response = self.session.get(f"{self.base_url}/{self.BASE_API_VERSION}/assets", timeout=10)
+            return response.status_code == 200
+        except Exception:
+            return False
+
+    def _bool_to_str(self, value):
         return "true" if value else "false"
 
     def _request(self, method, endpoint, params=None, data=None):
@@ -54,7 +67,6 @@ class StonFiComponents:
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 429:
                 wait_time = 2
-                print(f"Rate limit hit, waiting {wait_time} seconds...")
                 time.sleep(wait_time)
                 return self._request(method, endpoint, params, data)
             else:
@@ -63,19 +75,13 @@ class StonFiComponents:
         except Exception as e:
             raise Exception(f"Request failed: {str(e)}")
 
-    def get_asset(self, address: str) -> Dict[str, Any]:
+    def get_asset(self, address):
         return self._request("GET", f"/{self.BASE_API_VERSION}/assets/{address}")
 
-    def get_assets(self) -> Dict[str, Any]:
+    def get_assets(self):
         return self._request("GET", f"/{self.BASE_API_VERSION}/assets")
 
-    def query_assets(self, condition: Optional[str] = None, 
-                    limit: Optional[int] = None,
-                    search_terms: Optional[List[str]] = None,
-                    sort_by: Optional[List[str]] = None,
-                    unconditional_assets: Optional[List[str]] = None,
-                    wallet_address: Optional[str] = None) -> Dict[str, Any]:
-
+    def query_assets(self, condition=None, limit=None, search_terms=None, sort_by=None, unconditional_assets=None, wallet_address=None):
         data = {}
         if condition is not None:
             data["condition"] = condition
@@ -92,12 +98,7 @@ class StonFiComponents:
 
         return self._request("POST", f"/{self.BASE_API_VERSION}/assets/query", data=data)
 
-    def search_assets(self, search_string: str,
-                     condition: Optional[str] = None,
-                     unconditional_asset: Optional[List[str]] = None,
-                     limit: Optional[int] = None,
-                     wallet_address: Optional[str] = None) -> Dict[str, Any]:
-
+    def search_assets(self, search_string, condition=None, unconditional_asset=None, limit=None, wallet_address=None):
         params = {"search_string": search_string}
         if condition is not None:
             params["condition"] = condition
@@ -110,24 +111,17 @@ class StonFiComponents:
 
         return self._request("POST", f"/{self.BASE_API_VERSION}/assets/search", params=params)
 
-    def get_pool(self, address: str) -> Dict[str, Any]:
+    def get_pool(self, address):
         return self._request("GET", f"/{self.BASE_API_VERSION}/pools/{address}")
 
-    def get_pools(self, dex_v2: bool = True) -> Dict[str, Any]:
+    def get_pools(self, dex_v2=True):
         params = {"dex_v2": self._bool_to_str(dex_v2)}
         return self._request("GET", f"/{self.BASE_API_VERSION}/pools", params=params)
 
-    def get_pools_by_market(self, asset_0: str, asset_1: str) -> Dict[str, Any]:
+    def get_pools_by_market(self, asset_0, asset_1):
         return self._request("GET", f"/{self.BASE_API_VERSION}/pools/by_market/{asset_0}/{asset_1}")
 
-    def query_pools(self, condition: Optional[str] = None,
-                   dex_v2: bool = True,
-                   limit: Optional[int] = None,
-                   search_terms: Optional[List[str]] = None,
-                   sort_by: Optional[List[str]] = None,
-                   unconditional_assets: Optional[List[str]] = None,
-                   wallet_address: Optional[str] = None) -> Dict[str, Any]:
-
+    def query_pools(self, condition=None, dex_v2=True, limit=None, search_terms=None, sort_by=None, unconditional_assets=None, wallet_address=None):
         data = {"dex_v2": self._bool_to_str(dex_v2)}
         if condition is not None:
             data["condition"] = condition
@@ -144,26 +138,20 @@ class StonFiComponents:
 
         return self._request("POST", f"/{self.BASE_API_VERSION}/pools/query", data=data)
 
-    def get_farm(self, address: str) -> Dict[str, Any]:
+    def get_farm(self, address):
         return self._request("GET", f"/{self.BASE_API_VERSION}/farms/{address}")
 
-    def get_farms(self, dex_v2: bool = True, only_active: bool = False) -> Dict[str, Any]:
+    def get_farms(self, dex_v2=True, only_active=False):
         params = {
             "dex_v2": self._bool_to_str(dex_v2),
             "only_active": self._bool_to_str(only_active)
         }
         return self._request("GET", f"/{self.BASE_API_VERSION}/farms", params=params)
 
-    def get_farms_by_pool(self, pool_address: str) -> Dict[str, Any]:
+    def get_farms_by_pool(self, pool_address):
         return self._request("GET", f"/{self.BASE_API_VERSION}/farms/by_pool/{pool_address}")
 
-    def simulate_swap(self, offer_address: str, ask_address: str, units: str,
-                     slippage_tolerance: str, pool_address: Optional[str] = None,
-                     referral_address: Optional[str] = None,
-                     referral_fee_bps: Optional[str] = None,
-                     dex_v2: bool = True,
-                     dex_version: Optional[List[str]] = None) -> Dict[str, Any]:
-
+    def simulate_swap(self, offer_address, ask_address, units, slippage_tolerance, pool_address=None, referral_address=None, referral_fee_bps=None, dex_v2=True, dex_version=None):
         params = {
             "offer_address": offer_address,
             "ask_address": ask_address,
@@ -183,13 +171,7 @@ class StonFiComponents:
 
         return self._request("POST", f"/{self.BASE_API_VERSION}/swap/simulate", params=params)
 
-    def simulate_reverse_swap(self, offer_address: str, ask_address: str, units: str,
-                             slippage_tolerance: str, pool_address: Optional[str] = None,
-                             referral_address: Optional[str] = None,
-                             referral_fee_bps: Optional[str] = None,
-                             dex_v2: bool = True,
-                             dex_version: Optional[List[str]] = None) -> Dict[str, Any]:
-
+    def simulate_reverse_swap(self, offer_address, ask_address, units, slippage_tolerance, pool_address=None, referral_address=None, referral_fee_bps=None, dex_v2=True, dex_version=None):
         params = {
             "offer_address": offer_address,
             "ask_address": ask_address,
@@ -209,7 +191,7 @@ class StonFiComponents:
 
         return self._request("POST", f"/{self.BASE_API_VERSION}/reverse_swap/simulate", params=params)
 
-    def get_swap_status(self, router_address: str, owner_address: str, query_id: str) -> Dict[str, Any]:
+    def get_swap_status(self, router_address, owner_address, query_id):
         params = {
             "router_address": router_address,
             "owner_address": owner_address,
@@ -217,12 +199,7 @@ class StonFiComponents:
         }
         return self._request("GET", f"/{self.BASE_API_VERSION}/swap/status", params=params)
 
-    def simulate_liquidity_provision(self, provision_type: str, token_a: str, token_b: str,
-                                    slippage_tolerance: str, pool_address: Optional[str] = None,
-                                    wallet_address: Optional[str] = None,
-                                    token_a_units: Optional[str] = None,
-                                    token_b_units: Optional[str] = None) -> Dict[str, Any]:
-
+    def simulate_liquidity_provision(self, provision_type, token_a, token_b, slippage_tolerance, pool_address=None, wallet_address=None, token_a_units=None, token_b_units=None):
         params = {
             "provision_type": provision_type,
             "token_a": token_a,
@@ -241,25 +218,21 @@ class StonFiComponents:
 
         return self._request("POST", f"/{self.BASE_API_VERSION}/liquidity_provision/simulate", params=params)
 
-    def get_markets(self, dex_v2: bool = True) -> Dict[str, Any]:
+    def get_markets(self, dex_v2=True):
         params = {"dex_v2": self._bool_to_str(dex_v2)}
         return self._request("GET", f"/{self.BASE_API_VERSION}/markets", params=params)
 
-    def get_router(self, address: str) -> Dict[str, Any]:
+    def get_router(self, address):
         return self._request("GET", f"/{self.BASE_API_VERSION}/routers/{address}")
 
-    def get_routers(self, dex_v2: bool = True) -> Dict[str, Any]:
+    def get_routers(self, dex_v2=True):
         params = {"dex_v2": self._bool_to_str(dex_v2)}
         return self._request("GET", f"/{self.BASE_API_VERSION}/routers", params=params)
 
-    def get_transaction_action_tree(self, hash: str) -> Dict[str, Any]:
+    def get_transaction_action_tree(self, hash):
         return self._request("GET", f"/{self.BASE_API_VERSION}/transactions/{hash}/action_tree")
 
-    def query_transactions(self, wallet_address: Optional[str] = None,
-                          query_id: Optional[int] = None,
-                          min_tx_timestamp: Optional[str] = None,
-                          ext_msg_hash: Optional[str] = None) -> Dict[str, Any]:
-
+    def query_transactions(self, wallet_address=None, query_id=None, min_tx_timestamp=None, ext_msg_hash=None):
         params = {}
         if wallet_address:
             params["wallet_address"] = wallet_address
@@ -272,40 +245,37 @@ class StonFiComponents:
 
         return self._request("GET", f"/{self.BASE_API_VERSION}/transactions/query", params=params)
 
-    def get_jetton_wallet_address(self, jetton_address: str, owner_address: str) -> Dict[str, Any]:
+    def get_jetton_wallet_address(self, jetton_address, owner_address):
         params = {"owner_address": owner_address}
         return self._request("GET", f"/{self.BASE_API_VERSION}/jetton/{jetton_address}/address", params=params)
 
-    def get_wallet_asset(self, wallet_address: str, asset_address: str) -> Dict[str, Any]:
+    def get_wallet_asset(self, wallet_address, asset_address):
         return self._request("GET", f"/{self.BASE_API_VERSION}/wallets/{wallet_address}/assets/{asset_address}")
 
-    def get_wallet_assets(self, wallet_address: str) -> Dict[str, Any]:
+    def get_wallet_assets(self, wallet_address):
         return self._request("GET", f"/{self.BASE_API_VERSION}/wallets/{wallet_address}/assets")
 
-    def get_wallet_pool(self, wallet_address: str, pool_address: str) -> Dict[str, Any]:
+    def get_wallet_pool(self, wallet_address, pool_address):
         return self._request("GET", f"/{self.BASE_API_VERSION}/wallets/{wallet_address}/pools/{pool_address}")
 
-    def get_wallet_pools(self, wallet_address: str, dex_v2: bool = True) -> Dict[str, Any]:
+    def get_wallet_pools(self, wallet_address, dex_v2=True):
         params = {"dex_v2": self._bool_to_str(dex_v2)}
         return self._request("GET", f"/{self.BASE_API_VERSION}/wallets/{wallet_address}/pools", params=params)
 
-    def get_wallet_farm(self, wallet_address: str, farm_address: str) -> Dict[str, Any]:
+    def get_wallet_farm(self, wallet_address, farm_address):
         return self._request("GET", f"/{self.BASE_API_VERSION}/wallets/{wallet_address}/farms/{farm_address}")
 
-    def get_wallet_farms(self, wallet_address: str, dex_v2: bool = True, only_active: bool = False) -> Dict[str, Any]:
+    def get_wallet_farms(self, wallet_address, dex_v2=True, only_active=False):
         params = {
             "dex_v2": self._bool_to_str(dex_v2),
             "only_active": self._bool_to_str(only_active)
         }
         return self._request("GET", f"/{self.BASE_API_VERSION}/wallets/{wallet_address}/farms", params=params)
 
-    def get_wallet_fee_vaults(self, wallet_address: str) -> Dict[str, Any]:
+    def get_wallet_fee_vaults(self, wallet_address):
         return self._request("GET", f"/{self.BASE_API_VERSION}/wallets/{wallet_address}/fee_vaults")
 
-    def get_wallet_operations(self, wallet_address: str, since: str, until: str,
-                             op_type: Optional[List[str]] = None,
-                             dex_v2: bool = True) -> Dict[str, Any]:
-
+    def get_wallet_operations(self, wallet_address, since, until, op_type=None, dex_v2=True):
         params = {
             "since": since,
             "until": until,
@@ -317,19 +287,17 @@ class StonFiComponents:
 
         return self._request("GET", f"/{self.BASE_API_VERSION}/wallets/{wallet_address}/operations", params=params)
 
-    def get_wallet_stakes(self, wallet_address: str) -> Dict[str, Any]:
+    def get_wallet_stakes(self, wallet_address):
         return self._request("GET", f"/{self.BASE_API_VERSION}/wallets/{wallet_address}/stakes")
 
-    def get_wallet_last_transactions(self, wallet_address: str, limit: int = 10,
-                                    min_tx_timestamp: Optional[str] = None) -> Dict[str, Any]:
-
+    def get_wallet_last_transactions(self, wallet_address, limit=10, min_tx_timestamp=None):
         params = {"limit": limit}
         if min_tx_timestamp:
             params["min_tx_timestamp"] = min_tx_timestamp
 
         return self._request("GET", f"/{self.BASE_API_VERSION}/wallets/{wallet_address}/transactions/last", params=params)
 
-    def get_dex_stats(self, since: Optional[str] = None, until: Optional[str] = None) -> Dict[str, Any]:
+    def get_dex_stats(self, since=None, until=None):
         params = {}
         if since:
             params["since"] = since
@@ -338,7 +306,7 @@ class StonFiComponents:
 
         return self._request("GET", f"/{self.BASE_API_VERSION}/stats/dex", params=params)
 
-    def get_fee_accruals(self, referrer_address: str, since: str, until: str) -> Dict[str, Any]:
+    def get_fee_accruals(self, referrer_address, since, until):
         params = {
             "referrer_address": referrer_address,
             "since": since,
@@ -346,7 +314,7 @@ class StonFiComponents:
         }
         return self._request("GET", f"/{self.BASE_API_VERSION}/stats/fee_accruals", params=params)
 
-    def get_fee_withdrawals(self, referrer_address: str, since: str, until: str) -> Dict[str, Any]:
+    def get_fee_withdrawals(self, referrer_address, since, until):
         params = {
             "referrer_address": referrer_address,
             "since": since,
@@ -354,7 +322,7 @@ class StonFiComponents:
         }
         return self._request("GET", f"/{self.BASE_API_VERSION}/stats/fee_withdrawals", params=params)
 
-    def get_fees_stats(self, referrer_address: str, since: str, until: str) -> Dict[str, Any]:
+    def get_fees_stats(self, referrer_address, since, until):
         params = {
             "referrer_address": referrer_address,
             "since": since,
@@ -362,9 +330,7 @@ class StonFiComponents:
         }
         return self._request("GET", f"/{self.BASE_API_VERSION}/stats/fees", params=params)
 
-    def get_operations_stats(self, since: str, until: str,
-                            pool_address: Optional[List[str]] = None) -> Dict[str, Any]:
-
+    def get_operations_stats(self, since, until, pool_address=None):
         params = {
             "since": since,
             "until": until
@@ -375,9 +341,7 @@ class StonFiComponents:
 
         return self._request("GET", f"/{self.BASE_API_VERSION}/stats/operations", params=params)
 
-    def get_pool_stats(self, since: str, until: str,
-                      pool_address: Optional[List[str]] = None) -> Dict[str, Any]:
-
+    def get_pool_stats(self, since, until, pool_address=None):
         params = {
             "since": since,
             "until": until
@@ -388,24 +352,65 @@ class StonFiComponents:
 
         return self._request("GET", f"/{self.BASE_API_VERSION}/stats/pool", params=params)
 
-    def get_staking_stats(self) -> Dict[str, Any]:
+    def get_staking_stats(self):
         return self._request("GET", f"/{self.BASE_API_VERSION}/stats/staking")
 
-    def get_cmc_data(self) -> List[Dict[str, Any]]:
+    def get_cmc_data(self):
         return self._request("GET", "/export/cmc/v1")
 
-    def get_screener_asset_info(self, address: str) -> Dict[str, Any]:
+    def get_screener_asset_info(self, address):
         return self._request("GET", f"/export/dexscreener/v1/asset/{address}")
 
-    def get_screener_events(self, from_block: int, to_block: int) -> Dict[str, Any]:
+    def get_screener_events(self, from_block, to_block):
         params = {
             "fromBlock": from_block,
             "toBlock": to_block
         }
         return self._request("GET", "/export/dexscreener/v1/events", params=params)
 
-    def get_screener_latest_block(self) -> Dict[str, Any]:
+    def get_screener_latest_block(self):
         return self._request("GET", "/export/dexscreener/v1/latest-block")
 
-    def get_screener_pool_info(self, address: str) -> Dict[str, Any]:
+    def get_screener_pool_info(self, address):
         return self._request("GET", f"/export/dexscreener/v1/pair/{address}")
+
+    def get_asset_price_history(self, asset_address, interval="1d", limit=30):
+        params = {
+            "address": asset_address,
+            "interval": interval,
+            "limit": limit
+        }
+        return self._request("GET", f"/export/dexscreener/v1/asset/{asset_address}/history", params=params)
+
+    def get_pool_price_history(self, pool_address, interval="1d", limit=30):
+        params = {
+            "address": pool_address,
+            "interval": interval,
+            "limit": limit
+        }
+        return self._request("GET", f"/export/dexscreener/v1/pair/{pool_address}/history", params=params)
+
+    def get_top_tokens(self, limit=100):
+        params = {"limit": limit}
+        return self._request("GET", "/export/dexscreener/v1/tokens", params=params)
+
+    def get_top_pools(self, limit=100):
+        params = {"limit": limit}
+        return self._request("GET", "/export/dexscreener/v1/pairs", params=params)
+
+    def get_network_stats(self):
+        return self._request("GET", "/export/dexscreener/v1/network")
+
+    def get_token_search(self, query, limit=20):
+        params = {
+            "query": query,
+            "limit": limit
+        }
+        return self._request("GET", "/export/dexscreener/v1/search/tokens", params=params)
+
+    def get_pool_search(self, query, limit=20):
+        params = {
+            "query": query,
+            "limit": limit
+        }
+        return self._request("GET", "/export/dexscreener/v1/search/pairs", params=params)

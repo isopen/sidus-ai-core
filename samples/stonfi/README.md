@@ -9,14 +9,12 @@ For plugins to work, you need to install dependencies in your project yourself.
 
 ```requirements
 requests==2.32.3
-numpy
 ```
 
 Please use this commandline for install dependencies:
 
 ```commandline
 pip install requests
-pip install numpy
 ```
 
 ### Environments
