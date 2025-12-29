@@ -1,6 +1,6 @@
 import numpy as np
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 
 class DedustSkills:
     def __init__(self, components):
@@ -2276,3 +2276,157 @@ class DedustSkills:
             import traceback
             traceback.print_exc()
             return {"success": False, "error": str(e)}
+
+    def get_analyze_pool_skill(context: Dict[str, Any]) -> Dict[str, Any]:
+        client = context.get('dedust_client')
+        if not client or not hasattr(client, 'skills'):
+            return {"success": False, "error": "Dedust client not available"}
+
+        pool_address = context.get('pool_address')
+        if not pool_address:
+            return {"success": False, "error": "Pool address is required"}
+
+        return client.skills.analyze_pool(pool_address)
+
+    def get_analyze_asset_skill(context: Dict[str, Any]) -> Dict[str, Any]:
+        client = context.get('dedust_client')
+        if not client or not hasattr(client, 'skills'):
+            return {"success": False, "error": "Dedust client not available"}
+
+        symbol = context.get('symbol')
+        if not symbol:
+            return {"success": False, "error": "Symbol is required"}
+
+        return client.skills.analyze_asset(symbol)
+
+    def get_find_arbitrage_skill(context: Dict[str, Any]) -> Dict[str, Any]:
+        client = context.get('dedust_client')
+        if not client or not hasattr(client, 'skills'):
+            return {"success": False, "error": "Dedust client not available"}
+
+        min_profit_usd = context.get('min_profit_usd', 10.0)
+        min_tvl = context.get('min_tvl', 1000.0)
+        max_price_diff = context.get('max_price_diff', 0.10)
+
+        return client.skills.find_arbitrage_opportunities(
+            min_profit_usd, min_tvl, max_price_diff
+        )
+
+    def get_compare_pools_skill(context: Dict[str, Any]) -> Dict[str, Any]:
+        client = context.get('dedust_client')
+        if not client or not hasattr(client, 'skills'):
+            return {"success": False, "error": "Dedust client not available"}
+
+        pool_addresses = context.get('pool_addresses', [])
+        if not pool_addresses or len(pool_addresses) < 2:
+            return {"success": False, "error": "At least 2 pool addresses required"}
+
+        return client.skills.compare_pools(pool_addresses)
+
+    def get_analyze_liquidity_skill(context: Dict[str, Any]) -> Dict[str, Any]:
+        client = context.get('dedust_client')
+        if not client or not hasattr(client, 'skills'):
+            return {"success": False, "error": "Dedust client not available"}
+
+        token_address = context.get('token_address')
+        if not token_address:
+            return {"success": False, "error": "Token address is required"}
+
+        return client.skills.get_liquidity_analysis(token_address)
+
+    def get_top_performing_pools_skill(context: Dict[str, Any]) -> Dict[str, Any]:
+        client = context.get('dedust_client')
+        if not client or not hasattr(client, 'skills'):
+            return {"success": False, "error": "Dedust client not available"}
+
+        period = context.get('period', '24h')
+        limit = context.get('limit', 10)
+
+        return client.skills.get_top_performing_pools(period, limit)
+
+    def get_generate_pool_report_skill(context: Dict[str, Any]) -> Dict[str, Any]:
+        client = context.get('dedust_client')
+        if not client or not hasattr(client, 'skills'):
+            return {"success": False, "error": "Dedust client not available"}
+
+        pool_address = context.get('pool_address')
+        if not pool_address:
+            return {"success": False, "error": "Pool address is required"}
+
+        result = client.skills.generate_pool_report(pool_address)
+        return {"success": True, "report": result}
+
+    def get_calculate_impermanent_loss_skill(context: Dict[str, Any]) -> Dict[str, Any]:
+        client = context.get('dedust_client')
+        if not client or not hasattr(client, 'skills'):
+            return {"success": False, "error": "Dedust client not available"}
+
+        pool_address = context.get('pool_address')
+        token_a_change = context.get('token_a_change', 0.0)
+        token_b_change = context.get('token_b_change', 0.0)
+
+        if not pool_address:
+            return {"success": False, "error": "Pool address is required"}
+
+        return client.skills.calculate_impermanent_loss(
+            pool_address, token_a_change, token_b_change
+        )
+
+    def get_analyze_wallet_portfolio_skill(context: Dict[str, Any]) -> Dict[str, Any]:
+        client = context.get('dedust_client')
+        if not client or not hasattr(client, 'skills'):
+            return {"success": False, "error": "Dedust client not available"}
+
+        wallet_address = context.get('wallet_address')
+        if not wallet_address:
+            return {"success": False, "error": "Wallet address is required"}
+
+        return client.skills.analyze_wallet_portfolio(wallet_address)
+
+    def get_swap_recommendations_skill(context: Dict[str, Any]) -> Dict[str, Any]:
+        client = context.get('dedust_client')
+        if not client or not hasattr(client, 'skills'):
+            return {"success": False, "error": "Dedust client not available"}
+
+        offer_token = context.get('offer_token')
+        ask_token = context.get('ask_token')
+        amount = context.get('amount', 1.0)
+
+        if not offer_token or not ask_token:
+            return {"success": False, "error": "Offer token and ask token are required"}
+
+        if amount <= 0:
+            return {"success": False, "error": "Amount must be positive"}
+
+        return client.skills.get_swap_recommendations(
+            offer_token, ask_token, amount
+        )
+
+    def get_calculate_apy_breakdown_skill(context: Dict[str, Any]) -> Dict[str, Any]:
+        client = context.get('dedust_client')
+        if not client or not hasattr(client, 'skills'):
+            return {"success": False, "error": "Dedust client not available"}
+
+        jetton_address = context.get('jetton_address')
+        if not jetton_address:
+            return {"success": False, "error": "Jetton address is required"}
+
+        return client.skills.calculate_apy_breakdown(jetton_address)
+
+    def get_analyze_jetton_skill(context: Dict[str, Any]) -> Dict[str, Any]:
+        client = context.get('dedust_client')
+        if not client or not hasattr(client, 'skills'):
+            return {"success": False, "error": "Dedust client not available"}
+
+        jetton_address = context.get('jetton_address')
+        if not jetton_address:
+            return {"success": False, "error": "Jetton address is required"}
+
+        return client.skills.analyze_jetton(jetton_address)
+
+    def get_market_overview_skill(context: Dict[str, Any]) -> Dict[str, Any]:
+        client = context.get('dedust_client')
+        if not client or not hasattr(client, 'skills'):
+            return {"success": False, "error": "Dedust client not available"}
+
+        return client.skills.get_market_overview()
