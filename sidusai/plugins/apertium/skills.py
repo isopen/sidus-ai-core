@@ -144,7 +144,6 @@ class MorphologicalAnalysisSkill:
 
 
 class LanguageDetectionSkill:
-
     def __init__(self, analyzer: Optional[ApertiumAnalyzer] = None):
         self.analyzer = analyzer or ApertiumAnalyzer()
         self.name = "language_detection"
@@ -181,32 +180,95 @@ class LanguageDetectionSkill:
         results = []
         start_time = datetime.now()
 
+        words = [w.strip('.,!?;:"\'()[]{}') for w in text.split()]
+        words = [w for w in words if w]
+
+        language_character_patterns = {
+            "eng": [(" the ", 5), (" and ", 4), ("ing ", 3), (" of ", 3), (" to ", 3), (" a ", 2)],
+            "spa": [(" el ", 5), (" la ", 5), (" y ", 4), (" de ", 4), (" que ", 4), (" en ", 3)],
+            "fra": [(" le ", 5), (" la ", 5), (" et ", 4), (" de ", 4), (" que ", 4), (" est ", 3)],
+            "por": [(" o ", 5), (" a ", 5), (" e ", 4), (" de ", 4), (" que ", 4), (" do ", 3)],
+            "tur": [(" ve ", 5), (" bir ", 4), (" için ", 4), (" ama ", 3), (" ile ", 3)],
+        }
+
         for lang in valid_langs:
             try:
                 print(f"  Testing language: {lang} ({self.analyzer.supported_morph_languages.get(lang, 'Unknown')})")
                 result = await self.analyzer.analyse_text(text, lang, "morph")
 
                 score = 0.0
+                is_valid_analysis = False
+                meaningful_analyses = 0
+                total_analyses = 0
+
                 if "error" not in result:
                     if "analyses" in result and result["analyses"]:
                         analyses = result["analyses"]
-                        analysis_count = len(analyses)
+                        total_analyses = len(analyses)
 
-                        if analysis_count > 0:
-                            base_score = 0.3
-                            count_score = min(0.3, analysis_count * 0.05)
-                            avg_tags = sum(len(a.get("tags", [])) for a in analyses) / analysis_count
-                            tag_score = min(0.4, avg_tags * 0.1)
-                            score = base_score + count_score + tag_score
+                        if analyses:
+                            for analysis in analyses:
+                                if isinstance(analysis, dict):
+                                    lemma = analysis.get("lemma", "")
+                                    tags = analysis.get("tags", [])
 
-                            if len(text.split()) < 2 and analysis_count == 1:
-                                score *= 0.8
+                                    if lemma and lemma != "*" and lemma != text.lower() and lemma != "?":
+                                        if tags and len(tags) > 0:
+                                            meaningful_analyses += 1
+                                            is_valid_analysis = True
+
+                            if is_valid_analysis and meaningful_analyses > 0:
+                                if len(words) == 1:
+                                    word_score = 1.0 if meaningful_analyses == 1 else 0.5
+                                else:
+                                    word_score = min(1.0, meaningful_analyses / len(words))
+
+                                tag_counts = []
+                                for analysis in analyses:
+                                    if isinstance(analysis, dict):
+                                        lemma = analysis.get("lemma", "")
+                                        if lemma and lemma != "*" and lemma != text.lower():
+                                            tags = analysis.get("tags", [])
+                                            if tags:
+                                                tag_counts.append(len(tags))
+
+                                avg_tags = sum(tag_counts) / len(tag_counts) if tag_counts else 0
+                                tag_score = min(0.4, avg_tags * 0.1)
+
+                                quality_ratio = meaningful_analyses / total_analyses if total_analyses > 0 else 0
+                                quality_score = min(0.6, quality_ratio * 0.6)
+
+                                base_score = word_score * 0.4 + tag_score * 0.3 + quality_score * 0.3
+
+                                pattern_score = 0
+                                text_lower = " " + text.lower() + " "
+                                if lang in language_character_patterns:
+                                    for pattern, weight in language_character_patterns[lang]:
+                                        if pattern in text_lower:
+                                            pattern_score += weight
+
+                                pattern_bonus = min(0.2, pattern_score * 0.05)
+
+                                score = base_score + pattern_bonus
+
+                                if lang in ["eng", "spa", "fra"]:
+                                    score *= 1.05
+                            else:
+                                score = 0.1
+                        else:
+                            score = 0.05
+                    else:
+                        score = 0.05
+                else:
+                    score = 0.0
 
                 results.append({
                     "language": lang,
                     "language_name": self.analyzer.supported_morph_languages.get(lang, lang),
                     "score": round(score, 3),
-                    "analysis_count": len(result.get("analyses", [])),
+                    "analysis_count": total_analyses,
+                    "meaningful_analyses": meaningful_analyses,
+                    "valid_analysis": is_valid_analysis,
                     "success": "error" not in result,
                     "error": result.get("error") if "error" in result else None
                 })
@@ -218,7 +280,10 @@ class LanguageDetectionSkill:
                     "language_name": self.analyzer.supported_morph_languages.get(lang, lang),
                     "score": 0.0,
                     "error": str(e),
-                    "success": False
+                    "success": False,
+                    "valid_analysis": False,
+                    "meaningful_analyses": 0,
+                    "analysis_count": 0
                 })
 
         results.sort(key=lambda x: x["score"], reverse=True)
@@ -230,12 +295,27 @@ class LanguageDetectionSkill:
 
         if results:
             top_result = results[0]
-            if top_result["score"] > 0.1:
+            second_result = results[1] if len(results) > 1 else None
+
+            threshold = 0.4 if len(words) > 2 else 0.5
+
+            if top_result["score"] > threshold:
                 detected_lang = top_result["language"]
                 confidence = top_result["score"]
 
+                if second_result:
+                    score_diff = top_result["score"] - second_result["score"]
+                    if score_diff < 0.15:
+                        confidence *= 0.85
+                    elif score_diff > 0.3:
+                        confidence = min(confidence * 1.2, 1.0)
+
+            print(f"\nTop 5 candidates:")
+            for i, result in enumerate(results[:5], 1):
+                print(f"  {i}. {result['language']} ({result['language_name']}): {result['score']:.3f} (meaningful: {result['meaningful_analyses']}/{result['analysis_count']})")
+
         top_candidates = []
-        for result in results[:3]:
+        for result in results[:5]:
             lang_info = self.analyzer.get_language_info(result["language"])
             top_candidates.append({
                 **result,
@@ -247,6 +327,7 @@ class LanguageDetectionSkill:
             "timestamp": datetime.now().isoformat(),
             "processing_time": round(processing_time, 3),
             "text_length": len(text),
+            "word_count": len(words),
             "text_sample": text[:100] + ("..." if len(text) > 100 else ""),
             "detected_language": detected_lang,
             "detected_language_name": self.analyzer.supported_morph_languages.get(detected_lang, detected_lang) if detected_lang else None,
@@ -272,7 +353,6 @@ class LanguageDetectionSkill:
 
 
 class BatchAnalysisSkill:
-
     def __init__(self, analyzer: Optional[ApertiumAnalyzer] = None, cache: Optional[ApertiumCache] = None):
         self.analyzer = analyzer or ApertiumAnalyzer()
         self.cache = cache or ApertiumCache(max_size=1000)
