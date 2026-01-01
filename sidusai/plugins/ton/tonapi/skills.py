@@ -1,5 +1,5 @@
-from sidusai.core.plugin import ChatAgentValue, AgentValue
-from typing import Dict, Any, List
+from sidusai.core.plugin import AgentValue
+from typing import Dict, Any
 from datetime import datetime
 
 class TONDataValue(AgentValue):
@@ -17,50 +17,28 @@ class TONTokenValue(AgentValue):
         super().__init__()
         self.value = data
 
-def get_ton_price_skill(context: Dict[str, Any]) -> TONDataValue:
-    print("🔧 Starting get_ton_price_skill...")
+class TONNFTValue(AgentValue):
+    def __init__(self, data: Dict[str, Any]):
+        super().__init__()
+        self.value = data
 
-    currencies = context.get('currencies', ["USD", "EUR", "RUB"])
+class TONStakingValue(AgentValue):
+    def __init__(self, data: Dict[str, Any]):
+        super().__init__()
+        self.value = data
 
-    try:
-        tonapi_component = context.get('tonapi_component')
-        if not tonapi_component:
-            result = {"error": "TON API component not available"}
-            return TONDataValue(result)
+class TONDomainValue(AgentValue):
+    def __init__(self, data: Dict[str, Any]):
+        super().__init__()
+        self.value = data
 
-        print(f"💰 Getting TON price in {currencies}")
+def get_account_skill(context: Dict[str, Any]) -> TONWalletValue:
+    print("🔧 Starting get_account_skill...")
 
-        price_data = tonapi_component.get_ton_price(currencies)
+    account_id = context.get('account_id')
 
-        if not price_data:
-            result = {"error": "Failed to get TON price"}
-            return TONDataValue(result)
-
-        result = {
-            "success": True,
-            "currencies": currencies,
-            "prices": price_data.get('prices', {}),
-            "timestamp": price_data.get('timestamp', datetime.now().isoformat()),
-            "source": "TON API"
-        }
-
-        print(f"✅ TON price retrieved")
-        return TONDataValue(result)
-
-    except Exception as e:
-        print(f"❌ Error in get_ton_price_skill: {e}")
-        import traceback
-        traceback.print_exc()
-        result = {"error": f"Failed to get TON price: {str(e)}"}
-        return TONDataValue(result)
-
-def get_wallet_balance_skill(context: Dict[str, Any]) -> TONWalletValue:
-    print("🔧 Starting get_wallet_balance_skill...")
-
-    wallet_address = context.get('wallet_address')
-
-    if not wallet_address:
-        result = {"error": "No wallet address provided"}
+    if not account_id:
+        result = {"error": "No account ID provided"}
         return TONWalletValue(result)
 
     try:
@@ -69,38 +47,36 @@ def get_wallet_balance_skill(context: Dict[str, Any]) -> TONWalletValue:
             result = {"error": "TON API component not available"}
             return TONWalletValue(result)
 
-        print(f"💰 Getting balance for wallet: {wallet_address[:10]}...")
+        print(f"📋 Getting account info: {account_id}")
 
-        balance_data = tonapi_component.get_wallet_balance(wallet_address)
+        account_data = tonapi_component.get_account(account_id)
 
-        if not balance_data:
-            result = {"error": f"Failed to get balance for wallet {wallet_address}"}
+        if not account_data:
+            result = {"error": f"Failed to get account info for {account_id}"}
             return TONWalletValue(result)
 
         result = {
             "success": True,
-            "wallet_address": wallet_address,
-            "data": balance_data,
+            "account_id": account_id,
+            "data": account_data,
             "timestamp": datetime.now().isoformat()
         }
 
-        balance_ton = balance_data.get('balance_ton', 0)
-        print(f"✅ Wallet balance: {balance_ton:.2f} TON")
+        print(f"✅ Account info retrieved")
         return TONWalletValue(result)
 
     except Exception as e:
-        print(f"❌ Error in get_wallet_balance_skill: {e}")
-        result = {"error": f"Failed to get wallet balance: {str(e)}"}
+        print(f"❌ Error in get_account_skill: {e}")
+        result = {"error": f"Failed to get account info: {str(e)}"}
         return TONWalletValue(result)
 
-def get_wallet_transactions_skill(context: Dict[str, Any]) -> TONDataValue:
-    print("🔧 Starting get_wallet_transactions_skill...")
+def get_accounts_bulk_skill(context: Dict[str, Any]) -> TONDataValue:
+    print("🔧 Starting get_accounts_bulk_skill...")
 
-    wallet_address = context.get('wallet_address')
-    limit = context.get('limit', 10)
+    account_ids = context.get('account_ids', [])
 
-    if not wallet_address:
-        result = {"error": "No wallet address provided"}
+    if not account_ids:
+        result = {"error": "No account IDs provided"}
         return TONDataValue(result)
 
     try:
@@ -109,113 +85,38 @@ def get_wallet_transactions_skill(context: Dict[str, Any]) -> TONDataValue:
             result = {"error": "TON API component not available"}
             return TONDataValue(result)
 
-        print(f"💰 Getting transactions for wallet: {wallet_address[:10]}...")
+        print(f"📋 Getting bulk account info for {len(account_ids)} accounts...")
 
-        transactions = tonapi_component.get_wallet_transactions(wallet_address, limit)
+        accounts_data = tonapi_component.get_accounts_bulk(account_ids)
 
-        if not transactions:
-            result = {"error": f"Failed to get transactions for wallet {wallet_address}"}
+        if not accounts_data:
+            result = {"error": "Failed to get bulk account info"}
             return TONDataValue(result)
 
-        formatted_transactions = []
-        total_sent = 0
-        total_received = 0
-
-        for tx in transactions:
-            from_addr = tx.from_address.lower() if tx.from_address else ''
-            to_addr = tx.to_address.lower() if tx.to_address else ''
-            wallet_addr = wallet_address.lower()
-
-            is_sent = from_addr == wallet_addr
-            is_received = to_addr == wallet_addr
-
-            formatted_tx = {
-                "hash": tx.hash[:10] + "..." if tx.hash and len(tx.hash) > 10 else tx.hash or "",
-                "from": from_addr[:10] + "..." if from_addr and len(from_addr) > 10 else from_addr or "",
-                "to": to_addr[:10] + "..." if to_addr and len(to_addr) > 10 else to_addr or "",
-                "value": tx.value,
-                "fee": tx.fee,
-                "timestamp": tx.timestamp.isoformat() if tx.timestamp else None,
-                "message": tx.message[:50] + "..." if tx.message and len(tx.message) > 50 else tx.message,
-                "operation": tx.operation,
-                "direction": "sent" if is_sent else "received" if is_received else "unknown"
-            }
-
-            formatted_transactions.append(formatted_tx)
-
-            if is_sent:
-                total_sent += tx.value + tx.fee
-            elif is_received:
-                total_received += tx.value
-
         result = {
             "success": True,
-            "wallet_address": wallet_address,
-            "transactions": formatted_transactions,
-            "total_sent": total_sent,
-            "total_received": total_received,
-            "net_flow": total_received - total_sent,
-            "count": len(formatted_transactions),
+            "account_ids": account_ids,
+            "data": accounts_data,
+            "count": len(accounts_data.get('accounts', [])),
             "timestamp": datetime.now().isoformat()
         }
 
-        print(f"✅ Retrieved {len(formatted_transactions)} transactions")
-        print(f"   Sent: {total_sent:.6f} TON, Received: {total_received:.6f} TON")
+        print(f"✅ Bulk account info retrieved for {len(account_ids)} accounts")
         return TONDataValue(result)
 
     except Exception as e:
-        print(f"❌ Error in get_wallet_transactions_skill: {e}")
-        import traceback
-        traceback.print_exc()
-        result = {"error": f"Failed to get wallet transactions: {str(e)}"}
+        print(f"❌ Error in get_accounts_bulk_skill: {e}")
+        result = {"error": f"Failed to get bulk account info: {str(e)}"}
         return TONDataValue(result)
 
-def get_token_info_skill(context: Dict[str, Any]) -> TONTokenValue:
-    print("🔧 Starting get_token_info_skill...")
+def get_account_jettons_balances_skill(context: Dict[str, Any]) -> TONDataValue:
+    print("🔧 Starting get_account_jettons_balances_skill...")
 
-    token_address = context.get('token_address')
+    account_id = context.get('account_id')
+    currencies = context.get('currencies', ["ton", "usd"])
 
-    if not token_address:
-        result = {"error": "No token address provided"}
-        return TONTokenValue(result)
-
-    try:
-        tonapi_component = context.get('tonapi_component')
-        if not tonapi_component:
-            result = {"error": "TON API component not available"}
-            return TONTokenValue(result)
-
-        print(f"💰 Getting info for token: {token_address[:10]}...")
-
-        token_info = tonapi_component.get_token_info(token_address)
-
-        if not token_info:
-            result = {"error": f"Failed to get info for token {token_address}"}
-            return TONTokenValue(result)
-
-        result = {
-            "success": True,
-            "token_address": token_address,
-            "info": token_info,
-            "timestamp": datetime.now().isoformat()
-        }
-
-        print(f"✅ Token info retrieved for {token_info.get('name', 'Unknown')}")
-        return TONTokenValue(result)
-
-    except Exception as e:
-        print(f"❌ Error in get_token_info_skill: {e}")
-        result = {"error": f"Failed to get token info: {str(e)}"}
-        return TONTokenValue(result)
-
-def get_jetton_holders_skill(context: Dict[str, Any]) -> TONDataValue:
-    print("🔧 Starting get_jetton_holders_skill...")
-
-    jetton_address = context.get('jetton_address')
-    limit = context.get('limit', 10)
-
-    if not jetton_address:
-        result = {"error": "No jetton address provided"}
+    if not account_id:
+        result = {"error": "No account ID provided"}
         return TONDataValue(result)
 
     try:
@@ -224,51 +125,512 @@ def get_jetton_holders_skill(context: Dict[str, Any]) -> TONDataValue:
             result = {"error": "TON API component not available"}
             return TONDataValue(result)
 
-        print(f"💰 Getting holders for jetton: {jetton_address[:10]}...")
+        print(f"💰 Getting jettons balances for account: {account_id}")
 
-        holders = tonapi_component.get_jetton_holders(jetton_address, limit)
+        balances_data = tonapi_component.get_account_jettons_balances(account_id, currencies)
 
-        if not holders:
-            result = {"error": f"Failed to get holders for jetton {jetton_address}"}
+        if not balances_data:
+            result = {"error": f"Failed to get jettons balances for account {account_id}"}
             return TONDataValue(result)
-
-        formatted_holders = []
-        total_percentage = 0
-
-        for holder in holders:
-            formatted_holders.append({
-                "address": holder.get('address', ''),
-                "balance": holder.get('balance', 0),
-                "percentage": holder.get('percentage', 0),
-                "is_scam": holder.get('is_scam', False),
-                "is_wallet": holder.get('is_wallet', False)
-            })
-            total_percentage += holder.get('percentage', 0)
 
         result = {
             "success": True,
-            "jetton_address": jetton_address,
-            "holders": formatted_holders,
-            "total_holders": len(formatted_holders),
-            "top_holders_percentage": total_percentage,
+            "account_id": account_id,
+            "data": balances_data,
             "timestamp": datetime.now().isoformat()
         }
 
-        print(f"✅ Retrieved {len(formatted_holders)} holders")
+        print(f"✅ Jettons balances retrieved")
         return TONDataValue(result)
 
     except Exception as e:
-        print(f"❌ Error in get_jetton_holders_skill: {e}")
+        print(f"❌ Error in get_account_jettons_balances_skill: {e}")
+        result = {"error": f"Failed to get jettons balances: {str(e)}"}
+        return TONDataValue(result)
+
+def get_account_nft_items_skill(context: Dict[str, Any]) -> TONDataValue:
+    print("🔧 Starting get_account_nft_items_skill...")
+
+    account_id = context.get('account_id')
+    collection = context.get('collection')
+    limit = context.get('limit', 1000)
+    offset = context.get('offset', 0)
+    indirect_ownership = context.get('indirect_ownership', False)
+
+    if not account_id:
+        result = {"error": "No account ID provided"}
+        return TONDataValue(result)
+
+    try:
+        tonapi_component = context.get('tonapi_component')
+        if not tonapi_component:
+            result = {"error": "TON API component not available"}
+            return TONDataValue(result)
+
+        print(f"🖼️ Getting NFT items for account: {account_id}")
+
+        nft_data = tonapi_component.get_account_nft_items(
+            account_id, collection, limit, offset, indirect_ownership
+        )
+
+        if not nft_data:
+            result = {"error": f"Failed to get NFT items for account {account_id}"}
+            return TONDataValue(result)
+
+        result = {
+            "success": True,
+            "account_id": account_id,
+            "data": nft_data,
+            "count": len(nft_data.get('nft_items', [])),
+            "timestamp": datetime.now().isoformat()
+        }
+
+        print(f"✅ Retrieved {len(nft_data.get('nft_items', []))} NFT items")
+        return TONDataValue(result)
+
+    except Exception as e:
+        print(f"❌ Error in get_account_nft_items_skill: {e}")
+        result = {"error": f"Failed to get NFT items: {str(e)}"}
+        return TONDataValue(result)
+
+def get_account_events_skill(context: Dict[str, Any]) -> TONDataValue:
+    print("🔧 Starting get_account_events_skill...")
+
+    account_id = context.get('account_id')
+    limit = context.get('limit', 20)
+    before_lt = context.get('before_lt')
+    start_date = context.get('start_date')
+    end_date = context.get('end_date')
+    subject_only = context.get('subject_only', False)
+    initiator = context.get('initiator', False)
+
+    if not account_id:
+        result = {"error": "No account ID provided"}
+        return TONDataValue(result)
+
+    try:
+        tonapi_component = context.get('tonapi_component')
+        if not tonapi_component:
+            result = {"error": "TON API component not available"}
+            return TONDataValue(result)
+
+        print(f"📊 Getting events for account: {account_id}")
+
+        events_data = tonapi_component.get_account_events(
+            account_id, limit, before_lt, start_date, end_date, subject_only, initiator
+        )
+
+        if not events_data:
+            result = {"error": f"Failed to get events for account {account_id}"}
+            return TONDataValue(result)
+
+        result = {
+            "success": True,
+            "account_id": account_id,
+            "data": events_data,
+            "count": len(events_data.get('events', [])),
+            "timestamp": datetime.now().isoformat()
+        }
+
+        print(f"✅ Retrieved {len(events_data.get('events', []))} events")
+        return TONDataValue(result)
+
+    except Exception as e:
+        print(f"❌ Error in get_account_events_skill: {e}")
+        result = {"error": f"Failed to get account events: {str(e)}"}
+        return TONDataValue(result)
+
+def get_account_subscriptions_skill(context: Dict[str, Any]) -> TONDataValue:
+    print("🔧 Starting get_account_subscriptions_skill...")
+
+    account_id = context.get('account_id')
+
+    if not account_id:
+        result = {"error": "No account ID provided"}
+        return TONDataValue(result)
+
+    try:
+        tonapi_component = context.get('tonapi_component')
+        if not tonapi_component:
+            result = {"error": "TON API component not available"}
+            return TONDataValue(result)
+
+        print(f"🔔 Getting subscriptions for account: {account_id}")
+
+        subscriptions_data = tonapi_component.get_account_subscriptions(account_id)
+
+        if not subscriptions_data:
+            result = {"error": f"Failed to get subscriptions for account {account_id}"}
+            return TONDataValue(result)
+
+        result = {
+            "success": True,
+            "account_id": account_id,
+            "data": subscriptions_data,
+            "timestamp": datetime.now().isoformat()
+        }
+
+        print(f"✅ Subscriptions retrieved")
+        return TONDataValue(result)
+
+    except Exception as e:
+        print(f"❌ Error in get_account_subscriptions_skill: {e}")
+        result = {"error": f"Failed to get subscriptions: {str(e)}"}
+        return TONDataValue(result)
+
+def get_nft_collections_skill(context: Dict[str, Any]) -> TONDataValue:
+    print("🔧 Starting get_nft_collections_skill...")
+
+    limit = context.get('limit', 100)
+    offset = context.get('offset', 0)
+
+    try:
+        tonapi_component = context.get('tonapi_component')
+        if not tonapi_component:
+            result = {"error": "TON API component not available"}
+            return TONDataValue(result)
+
+        print(f"🖼️ Getting NFT collections...")
+
+        collections_data = tonapi_component.get_nft_collections(limit, offset)
+
+        if not collections_data:
+            result = {"error": "Failed to get NFT collections"}
+            return TONDataValue(result)
+
+        result = {
+            "success": True,
+            "data": collections_data,
+            "count": len(collections_data.get('nft_collections', [])),
+            "timestamp": datetime.now().isoformat()
+        }
+
+        print(f"✅ Retrieved {len(collections_data.get('nft_collections', []))} NFT collections")
+        return TONDataValue(result)
+
+    except Exception as e:
+        print(f"❌ Error in get_nft_collections_skill: {e}")
+        result = {"error": f"Failed to get NFT collections: {str(e)}"}
+        return TONDataValue(result)
+
+def get_nft_collection_items_skill(context: Dict[str, Any]) -> TONDataValue:
+    print("🔧 Starting get_nft_collection_items_skill...")
+
+    collection_id = context.get('collection_id')
+    limit = context.get('limit', 1000)
+    offset = context.get('offset', 0)
+
+    if not collection_id:
+        result = {"error": "No collection ID provided"}
+        return TONDataValue(result)
+
+    try:
+        tonapi_component = context.get('tonapi_component')
+        if not tonapi_component:
+            result = {"error": "TON API component not available"}
+            return TONDataValue(result)
+
+        print(f"🖼️ Getting items from collection: {collection_id}")
+
+        items_data = tonapi_component.get_items_from_collection(collection_id, limit, offset)
+
+        if not items_data:
+            result = {"error": f"Failed to get items from collection {collection_id}"}
+            return TONDataValue(result)
+
+        result = {
+            "success": True,
+            "collection_id": collection_id,
+            "data": items_data,
+            "count": len(items_data.get('nft_items', [])),
+            "timestamp": datetime.now().isoformat()
+        }
+
+        print(f"✅ Retrieved {len(items_data.get('nft_items', []))} items from collection")
+        return TONDataValue(result)
+
+    except Exception as e:
+        print(f"❌ Error in get_nft_collection_items_skill: {e}")
+        result = {"error": f"Failed to get collection items: {str(e)}"}
+        return TONDataValue(result)
+
+def get_nft_items_bulk_skill(context: Dict[str, Any]) -> TONDataValue:
+    print("🔧 Starting get_nft_items_bulk_skill...")
+
+    nft_addresses = context.get('nft_addresses', [])
+
+    if not nft_addresses:
+        result = {"error": "No NFT addresses provided"}
+        return TONDataValue(result)
+
+    try:
+        tonapi_component = context.get('tonapi_component')
+        if not tonapi_component:
+            result = {"error": "TON API component not available"}
+            return TONDataValue(result)
+
+        print(f"🖼️ Getting NFT items in bulk for {len(nft_addresses)} addresses...")
+
+        nft_data = tonapi_component.get_nft_items_by_addresses(nft_addresses)
+
+        if not nft_data:
+            result = {"error": "Failed to get NFT items in bulk"}
+            return TONDataValue(result)
+
+        result = {
+            "success": True,
+            "nft_addresses": nft_addresses,
+            "data": nft_data,
+            "count": len(nft_data.get('nft_items', [])),
+            "timestamp": datetime.now().isoformat()
+        }
+
+        print(f"✅ Retrieved {len(nft_data.get('nft_items', []))} NFT items in bulk")
+        return TONDataValue(result)
+
+    except Exception as e:
+        print(f"❌ Error in get_nft_items_bulk_skill: {e}")
+        result = {"error": f"Failed to get NFT items in bulk: {str(e)}"}
+        return TONDataValue(result)
+
+def get_jettons_list_skill(context: Dict[str, Any]) -> TONDataValue:
+    print("🔧 Starting get_jettons_list_skill...")
+
+    limit = context.get('limit', 100)
+    offset = context.get('offset', 0)
+
+    try:
+        tonapi_component = context.get('tonapi_component')
+        if not tonapi_component:
+            result = {"error": "TON API component not available"}
+            return TONDataValue(result)
+
+        print(f"💰 Getting jettons list...")
+
+        jettons_data = tonapi_component.get_jettons(limit, offset)
+
+        if not jettons_data:
+            result = {"error": "Failed to get jettons list"}
+            return TONDataValue(result)
+
+        result = {
+            "success": True,
+            "data": jettons_data,
+            "count": len(jettons_data.get('jettons', [])),
+            "timestamp": datetime.now().isoformat()
+        }
+
+        print(f"✅ Retrieved {len(jettons_data.get('jettons', []))} jettons")
+        return TONDataValue(result)
+
+    except Exception as e:
+        print(f"❌ Error in get_jettons_list_skill: {e}")
+        result = {"error": f"Failed to get jettons list: {str(e)}"}
+        return TONDataValue(result)
+
+def get_jettons_bulk_skill(context: Dict[str, Any]) -> TONDataValue:
+    print("🔧 Starting get_jettons_bulk_skill...")
+
+    jetton_addresses = context.get('jetton_addresses', [])
+
+    if not jetton_addresses:
+        result = {"error": "No jetton addresses provided"}
+        return TONDataValue(result)
+
+    try:
+        tonapi_component = context.get('tonapi_component')
+        if not tonapi_component:
+            result = {"error": "TON API component not available"}
+            return TONDataValue(result)
+
+        print(f"💰 Getting jettons in bulk for {len(jetton_addresses)} addresses...")
+
+        jettons_data = tonapi_component.get_jetton_infos_by_addresses(jetton_addresses)
+
+        if not jettons_data:
+            result = {"error": "Failed to get jettons in bulk"}
+            return TONDataValue(result)
+
+        result = {
+            "success": True,
+            "jetton_addresses": jetton_addresses,
+            "data": jettons_data,
+            "count": len(jettons_data.get('jettons', [])),
+            "timestamp": datetime.now().isoformat()
+        }
+
+        print(f"✅ Retrieved {len(jettons_data.get('jettons', []))} jettons in bulk")
+        return TONDataValue(result)
+
+    except Exception as e:
+        print(f"❌ Error in get_jettons_bulk_skill: {e}")
+        result = {"error": f"Failed to get jettons in bulk: {str(e)}"}
+        return TONDataValue(result)
+
+def get_jetton_holders_full_skill(context: Dict[str, Any]) -> TONDataValue:
+    print("🔧 Starting get_jetton_holders_full_skill...")
+
+    jetton_id = context.get('jetton_id')
+    limit = context.get('limit', 1000)
+    offset = context.get('offset', 0)
+
+    if not jetton_id:
+        result = {"error": "No jetton ID provided"}
+        return TONDataValue(result)
+
+    try:
+        tonapi_component = context.get('tonapi_component')
+        if not tonapi_component:
+            result = {"error": "TON API component not available"}
+            return TONDataValue(result)
+
+        print(f"👥 Getting holders for jetton: {jetton_id}")
+
+        holders_data = tonapi_component.get_jetton_holders(jetton_id, limit, offset)
+
+        if not holders_data:
+            result = {"error": f"Failed to get holders for jetton {jetton_id}"}
+            return TONDataValue(result)
+
+        result = {
+            "success": True,
+            "jetton_id": jetton_id,
+            "data": holders_data,
+            "total_holders": holders_data.get('total', 0),
+            "timestamp": datetime.now().isoformat()
+        }
+
+        print(f"✅ Retrieved holders data for jetton")
+        return TONDataValue(result)
+
+    except Exception as e:
+        print(f"❌ Error in get_jetton_holders_full_skill: {e}")
         result = {"error": f"Failed to get jetton holders: {str(e)}"}
         return TONDataValue(result)
 
-def get_nft_collection_skill(context: Dict[str, Any]) -> TONDataValue:
-    print("🔧 Starting get_nft_collection_skill...")
+def get_dns_info_skill(context: Dict[str, Any]) -> TONDomainValue:
+    print("🔧 Starting get_dns_info_skill...")
 
-    collection_address = context.get('collection_address')
+    domain_name = context.get('domain_name')
 
-    if not collection_address:
-        result = {"error": "No NFT collection address provided"}
+    if not domain_name:
+        result = {"error": "No domain name provided"}
+        return TONDomainValue(result)
+
+    try:
+        tonapi_component = context.get('tonapi_component')
+        if not tonapi_component:
+            result = {"error": "TON API component not available"}
+            return TONDomainValue(result)
+
+        print(f"🌐 Getting DNS info for domain: {domain_name}")
+
+        dns_data = tonapi_component.get_dns_info(domain_name)
+
+        if not dns_data:
+            result = {"error": f"Failed to get DNS info for domain {domain_name}"}
+            return TONDomainValue(result)
+
+        result = {
+            "success": True,
+            "domain_name": domain_name,
+            "data": dns_data,
+            "timestamp": datetime.now().isoformat()
+        }
+
+        print(f"✅ DNS info retrieved for {domain_name}")
+        return TONDomainValue(result)
+
+    except Exception as e:
+        print(f"❌ Error in get_dns_info_skill: {e}")
+        result = {"error": f"Failed to get DNS info: {str(e)}"}
+        return TONDomainValue(result)
+
+def dns_resolve_skill(context: Dict[str, Any]) -> TONDomainValue:
+    print("🔧 Starting dns_resolve_skill...")
+
+    domain_name = context.get('domain_name')
+    filter_results = context.get('filter', False)
+
+    if not domain_name:
+        result = {"error": "No domain name provided"}
+        return TONDomainValue(result)
+
+    try:
+        tonapi_component = context.get('tonapi_component')
+        if not tonapi_component:
+            result = {"error": "TON API component not available"}
+            return TONDomainValue(result)
+
+        print(f"🌐 Resolving DNS for domain: {domain_name}")
+
+        resolve_data = tonapi_component.dns_resolve(domain_name, filter_results)
+
+        if not resolve_data:
+            result = {"error": f"Failed to resolve DNS for domain {domain_name}"}
+            return TONDomainValue(result)
+
+        result = {
+            "success": True,
+            "domain_name": domain_name,
+            "data": resolve_data,
+            "timestamp": datetime.now().isoformat()
+        }
+
+        print(f"✅ DNS resolved for {domain_name}")
+        return TONDomainValue(result)
+
+    except Exception as e:
+        print(f"❌ Error in dns_resolve_skill: {e}")
+        result = {"error": f"Failed to resolve DNS: {str(e)}"}
+        return TONDomainValue(result)
+
+def get_domain_bids_skill(context: Dict[str, Any]) -> TONDomainValue:
+    print("🔧 Starting get_domain_bids_skill...")
+
+    domain_name = context.get('domain_name')
+
+    if not domain_name:
+        result = {"error": "No domain name provided"}
+        return TONDomainValue(result)
+
+    try:
+        tonapi_component = context.get('tonapi_component')
+        if not tonapi_component:
+            result = {"error": "TON API component not available"}
+            return TONDomainValue(result)
+
+        print(f"💰 Getting domain bids for: {domain_name}")
+
+        bids_data = tonapi_component.get_domain_bids(domain_name)
+
+        if not bids_data:
+            result = {"error": f"Failed to get domain bids for {domain_name}"}
+            return TONDomainValue(result)
+
+        result = {
+            "success": True,
+            "domain_name": domain_name,
+            "data": bids_data,
+            "timestamp": datetime.now().isoformat()
+        }
+
+        print(f"✅ Domain bids retrieved for {domain_name}")
+        return TONDomainValue(result)
+
+    except Exception as e:
+        print(f"❌ Error in get_domain_bids_skill: {e}")
+        result = {"error": f"Failed to get domain bids: {str(e)}"}
+        return TONDomainValue(result)
+
+def get_rates_full_skill(context: Dict[str, Any]) -> TONDataValue:
+    print("🔧 Starting get_rates_full_skill...")
+
+    tokens = context.get('tokens', ["ton"])
+    currencies = context.get('currencies', ["USD", "EUR", "RUB"])
+
+    if not tokens or not currencies:
+        result = {"error": "Tokens and currencies lists must be provided"}
         return TONDataValue(result)
 
     try:
@@ -277,36 +639,57 @@ def get_nft_collection_skill(context: Dict[str, Any]) -> TONDataValue:
             result = {"error": "TON API component not available"}
             return TONDataValue(result)
 
-        print(f"💰 Getting NFT collection: {collection_address[:10]}...")
+        print(f"💰 Getting rates for {len(tokens)} tokens in {len(currencies)} currencies...")
 
-        collection_info = tonapi_component.get_nft_collection(collection_address)
+        rates_data = tonapi_component.get_rates(tokens, currencies)
 
-        if not collection_info:
-            result = {"error": f"Failed to get NFT collection {collection_address}"}
+        if not rates_data:
+            result = {"error": "Failed to get rates"}
             return TONDataValue(result)
+
+        formatted_rates = {}
+        for token, token_data in rates_data.get('rates', {}).items():
+            formatted_rates[token] = {
+                'prices': token_data.get('prices', {}),
+                'diff_24h': token_data.get('diff_24h', 'N/A'),
+                'diff_7d': token_data.get('diff_7d', 'N/A'),
+                'diff_30d': token_data.get('diff_30d', 'N/A')
+            }
 
         result = {
             "success": True,
-            "collection_address": collection_address,
-            "info": collection_info,
+            "tokens": tokens,
+            "currencies": currencies,
+            "rates": formatted_rates,
+            "raw_data": rates_data,
             "timestamp": datetime.now().isoformat()
         }
 
-        print(f"✅ NFT collection info retrieved for {collection_info.get('name', 'Unknown')}")
+        for token, token_data in formatted_rates.items():
+            print(f"✅ {token.upper()}:")
+            for currency, price in token_data['prices'].items():
+                print(f"   {currency}: ${price:.4f}")
+            if token_data.get('diff_24h'):
+                print(f"   24h change: {token_data['diff_24h']}%")
+
         return TONDataValue(result)
 
     except Exception as e:
-        print(f"❌ Error in get_nft_collection_skill: {e}")
-        result = {"error": f"Failed to get NFT collection: {str(e)}"}
+        print(f"❌ Error in get_rates_full_skill: {e}")
+        result = {"error": f"Failed to get rates: {str(e)}"}
         return TONDataValue(result)
 
-def get_nft_item_skill(context: Dict[str, Any]) -> TONDataValue:
-    print("🔧 Starting get_nft_item_skill...")
+def get_chart_rates_skill(context: Dict[str, Any]) -> TONDataValue:
+    print("🔧 Starting get_chart_rates_skill...")
 
-    nft_address = context.get('nft_address')
+    token = context.get('token')
+    currency = context.get('currency', 'usd')
+    start_date = context.get('start_date')
+    end_date = context.get('end_date')
+    points_count = context.get('points_count', 200)
 
-    if not nft_address:
-        result = {"error": "No NFT address provided"}
+    if not token:
+        result = {"error": "No token provided"}
         return TONDataValue(result)
 
     try:
@@ -315,434 +698,298 @@ def get_nft_item_skill(context: Dict[str, Any]) -> TONDataValue:
             result = {"error": "TON API component not available"}
             return TONDataValue(result)
 
-        print(f"💰 Getting NFT item: {nft_address[:10]}...")
+        print(f"📈 Getting chart rates for token: {token}")
 
-        nft_info = tonapi_component.get_nft_item(nft_address)
+        chart_data = tonapi_component.get_chart_rates(
+            token, currency, start_date, end_date, points_count
+        )
 
-        if not nft_info:
-            result = {"error": f"Failed to get NFT item {nft_address}"}
+        if not chart_data:
+            result = {"error": f"Failed to get chart rates for token {token}"}
             return TONDataValue(result)
 
         result = {
             "success": True,
-            "nft_address": nft_address,
-            "info": nft_info,
+            "token": token,
+            "currency": currency,
+            "data": chart_data,
+            "points_count": len(chart_data.get('points', [])),
             "timestamp": datetime.now().isoformat()
         }
 
-        print(f"✅ NFT item info retrieved for {nft_info.get('name', 'Unknown')}")
+        print(f"✅ Chart rates retrieved with {len(chart_data.get('points', []))} points")
         return TONDataValue(result)
 
     except Exception as e:
-        print(f"❌ Error in get_nft_item_skill: {e}")
-        result = {"error": f"Failed to get NFT item: {str(e)}"}
+        print(f"❌ Error in get_chart_rates_skill: {e}")
+        result = {"error": f"Failed to get chart rates: {str(e)}"}
         return TONDataValue(result)
 
-def tonapi_chat_skill(chat: ChatAgentValue) -> ChatAgentValue:
-    print("🔧 Starting tonapi_chat_skill...")
+def get_markets_rates_skill(context: Dict[str, Any]) -> TONDataValue:
+    print("🔧 Starting get_markets_rates_skill...")
 
     try:
-        if not chat.messages:
-            chat.append_assistant(
-                "⚡ **TON API - The Open Network**\n\n"
-                "I provide data and analytics for The Open Network (TON) blockchain.\n\n"
-                "**Available Commands:**\n"
-                "• `price [currencies]` - Get TON price (e.g., price USD,EUR,RUB)\n"
-                "• `balance <address>` - Get wallet balance\n"
-                "• `transactions <address> [limit]` - Get wallet transactions\n"
-                "• `token <address>` - Get token information\n"
-                "• `holders <address> [limit]` - Get jetton holders\n"
-                "• `nftcollection <address>` - Get NFT collection info\n"
-                "• `nftitem <address>` - Get NFT item info\n"
-                "• `marketplace [name]` - Get marketplace stats\n"
-                "• `help` - Show this help message\n\n"
-                "**Examples:**\n"
-                "• price USD,EUR,RUB\n"
-                "• balance EQDR4ne9zGk9dM...\n"
-                "• transactions EQDR4ne9zGk9dM... 20\n"
-                "• token EQB-MPw...\n"
-                "• holders EQB-MPw... 15\n"
-                "• nftcollection EQB-MPw...\n"
-                "• nftitem EQB-MPw...\n"
-                "• marketplace getgems\n"
-                "• help"
-            )
-            return chat
-
-        last_message = chat.messages[-1]['content'].strip().lower()
-
-        tonapi_component = chat.context.get('tonapi_component') if hasattr(chat, 'context') else None
-
+        tonapi_component = context.get('tonapi_component')
         if not tonapi_component:
-            chat.append_assistant("❌ TON API component not available")
-            return chat
+            result = {"error": "TON API component not available"}
+            return TONDataValue(result)
 
-        if last_message.startswith('price'):
-            parts = last_message.replace('price', '').strip()
-            currencies = ["USD", "EUR", "RUB"]
-            if parts:
-                currencies = [c.strip().upper() for c in parts.split(',') if c.strip()]
+        print(f"🏪 Getting market rates...")
 
-            context = {
-                'currencies': currencies,
-                'tonapi_component': tonapi_component
+        markets_data = tonapi_component.get_markets_rates()
+
+        if not markets_data:
+            result = {"error": "Failed to get market rates"}
+            return TONDataValue(result)
+
+        result = {
+            "success": True,
+            "data": markets_data,
+            "count": len(markets_data.get('markets', [])),
+            "timestamp": datetime.now().isoformat()
+        }
+
+        print(f"✅ Market rates retrieved from {len(markets_data.get('markets', []))} markets")
+        return TONDataValue(result)
+
+    except Exception as e:
+        print(f"❌ Error in get_markets_rates_skill: {e}")
+        result = {"error": f"Failed to get market rates: {str(e)}"}
+        return TONDataValue(result)
+
+def get_staking_pools_skill(context: Dict[str, Any]) -> TONStakingValue:
+    print("🔧 Starting get_staking_pools_skill...")
+
+    available_for = context.get('available_for')
+    include_unverified = context.get('include_unverified', False)
+
+    try:
+        tonapi_component = context.get('tonapi_component')
+        if not tonapi_component:
+            result = {"error": "TON API component not available"}
+            return TONStakingValue(result)
+
+        print(f"🏦 Getting staking pools...")
+
+        pools_data = tonapi_component.get_staking_pools(available_for, include_unverified)
+
+        if not pools_data:
+            result = {"error": "Failed to get staking pools"}
+            return TONStakingValue(result)
+
+        result = {
+            "success": True,
+            "data": pools_data,
+            "count": len(pools_data.get('pools', [])),
+            "timestamp": datetime.now().isoformat()
+        }
+
+        print(f"✅ Retrieved {len(pools_data.get('pools', []))} staking pools")
+        return TONStakingValue(result)
+
+    except Exception as e:
+        print(f"❌ Error in get_staking_pools_skill: {e}")
+        result = {"error": f"Failed to get staking pools: {str(e)}"}
+        return TONStakingValue(result)
+
+def get_staking_pool_info_skill(context: Dict[str, Any]) -> TONStakingValue:
+    print("🔧 Starting get_staking_pool_info_skill...")
+
+    pool_address = context.get('pool_address')
+
+    if not pool_address:
+        result = {"error": "No pool address provided"}
+        return TONStakingValue(result)
+
+    try:
+        tonapi_component = context.get('tonapi_component')
+        if not tonapi_component:
+            result = {"error": "TON API component not available"}
+            return TONStakingValue(result)
+
+        print(f"🏦 Getting staking pool info for: {pool_address}")
+
+        response_data = tonapi_component.get_staking_pool_info(pool_address)
+
+        if response_data is None:
+            result = {
+                "success": False,
+                "error": "API returned None - pool may not exist",
+                "pool_address": pool_address,
+                "timestamp": datetime.now().isoformat()
             }
+            return TONStakingValue(result)
 
-            result = get_ton_price_skill(context)
-            data = result.value
+        pool_data = response_data.get('pool') if 'pool' in response_data else response_data
 
-            if data.get('success'):
-                prices = data.get('prices', {})
-                response = [
-                    f"💰 **TON Price**",
-                    f"*Current exchange rates*",
-                    ""
-                ]
-
-                for currency, price in prices.items():
-                    response.append(f"**1 TON = {price:.2f} {currency}**")
-
-                response.append(f"\n*Source: {data.get('source', 'TON API')}*")
-                response.append(f"*Updated: {data.get('timestamp', '')}*")
-
-                chat.append_assistant("\n".join(response))
-            else:
-                chat.append_assistant(f"❌ Failed to get TON price: {data.get('error', 'Unknown error')}")
-
-        elif last_message.startswith('balance '):
-            wallet_address = last_message.replace('balance ', '').strip()
-            context = {
-                'wallet_address': wallet_address,
-                'tonapi_component': tonapi_component
+        if not isinstance(pool_data, dict):
+            result = {
+                "success": False,
+                "error": f"Invalid data format: {type(pool_data)}",
+                "pool_address": pool_address,
+                "timestamp": datetime.now().isoformat()
             }
+            return TONStakingValue(result)
 
-            result = get_wallet_balance_skill(context)
-            data = result.value
-
-            if data.get('success'):
-                wallet_data = data['data']
-                balance_ton = wallet_data.get('balance_ton', 0)
-                is_scam = wallet_data.get('is_scam', False)
-                is_wallet = wallet_data.get('is_wallet', False)
-                status = wallet_data.get('status', 'unknown')
-
-                response = [
-                    f"💰 **Wallet Balance**",
-                    f"**Address:** `{wallet_address[:15]}...`",
-                    f"**Balance:** {balance_ton:.2f} TON",
-                    f"**Status:** {status.upper()}"
-                ]
-
-                if is_scam:
-                    response.append("⚠️ **WARNING:** This address is marked as SCAM!")
-                elif is_wallet:
-                    response.append("✅ **Verified:** This is a wallet address")
-
-                last_activity = wallet_data.get('last_activity', '')
-                if last_activity:
-                    response.append(f"**Last Activity:** {last_activity[:10]}")
-
-                response.append(f"\n*Data provided by TON API*")
-
-                chat.append_assistant("\n".join(response))
-            else:
-                chat.append_assistant(f"❌ Failed to get wallet balance: {data.get('error', 'Unknown error')}")
-
-        elif last_message.startswith('transactions '):
-            parts = last_message.replace('transactions ', '').strip().split()
-            if len(parts) >= 1:
-                wallet_address = parts[0]
-                limit = int(parts[1]) if len(parts) > 1 else 10
-
-                context = {
-                    'wallet_address': wallet_address,
-                    'limit': limit,
-                    'tonapi_component': tonapi_component
-                }
-
-                result = get_wallet_transactions_skill(context)
-                data = result.value
-
-                if data.get('success'):
-                    transactions = data.get('transactions', [])
-                    total_sent = data.get('total_sent', 0)
-                    total_received = data.get('total_received', 0)
-
-                    response = [
-                        f"📊 **Wallet Transactions**",
-                        f"**Address:** `{wallet_address[:15]}...`",
-                        f"**Total Transactions:** {len(transactions)}",
-                        f"**Total Sent:** {total_sent:.2f} TON",
-                        f"**Total Received:** {total_received:.2f} TON",
-                        f"**Net Flow:** {total_received - total_sent:.2f} TON",
-                        ""
-                    ]
-
-                    if transactions:
-                        response.append("**Recent Transactions:**")
-                        for i, tx in enumerate(transactions[:5], 1):
-                            direction = "⬆️ Sent" if tx['from'] == wallet_address[:10] + "..." else "⬇️ Received"
-                            response.append(f"\n**#{i} {direction}**")
-                            response.append(f"• Amount: {tx['value']:.2f} TON")
-                            response.append(f"• Fee: {tx['fee']:.6f} TON")
-                            if tx['message']:
-                                response.append(f"• Message: {tx['message']}")
-                            if tx['timestamp']:
-                                response.append(f"• Time: {tx['timestamp'][:10]}")
-
-                    chat.append_assistant("\n".join(response))
-                else:
-                    chat.append_assistant(f"❌ Failed to get transactions: {data.get('error', 'Unknown error')}")
-            else:
-                chat.append_assistant("❌ Invalid format. Usage: transactions <address> [limit]")
-
-        elif last_message.startswith('token '):
-            token_address = last_message.replace('token ', '').strip()
-            context = {
-                'token_address': token_address,
-                'tonapi_component': tonapi_component
+        if 'error' in pool_data:
+            result = {
+                "success": False,
+                "error": pool_data.get('error', 'Unknown error'),
+                "pool_address": pool_address,
+                "timestamp": datetime.now().isoformat()
             }
+            return TONStakingValue(result)
 
-            result = get_token_info_skill(context)
-            data = result.value
+        min_stake_nano = pool_data.get('min_stake', 0)
+        total_amount_nano = pool_data.get('total_amount', 0)
+        profit_per_month_nano = pool_data.get('profit_per_month', 0)
 
-            if data.get('success'):
-                token_info = data['info']
-                name = token_info.get('name', 'Unknown')
-                symbol = token_info.get('symbol', 'UNKNOWN')
-                is_verified = token_info.get('is_verified', False)
-                is_scam = token_info.get('is_scam', False)
-                holders_count = token_info.get('holders_count', 0)
-                total_supply = token_info.get('total_supply', 0)
+        min_stake_ton = min_stake_nano / 1000000000 if min_stake_nano > 0 else 0
+        total_amount_ton = total_amount_nano / 1000000000 if total_amount_nano > 0 else 0
+        profit_per_month_ton = profit_per_month_nano / 1000000000 if profit_per_month_nano > 0 else 0
 
-                response = [
-                    f"🎯 **Token Information**",
-                    f"**Name:** {name}",
-                    f"**Symbol:** {symbol}",
-                    f"**Address:** `{token_address[:15]}...`"
-                ]
+        current_nominators = pool_data.get('current_nominators', 0)
+        average_stake_ton = total_amount_ton / current_nominators if current_nominators > 0 else 0
 
-                if is_verified:
-                    response.append("✅ **Verified Token**")
-                elif is_scam:
-                    response.append("⚠️ **WARNING: Scam Token**")
-                else:
-                    response.append("⚠️ **Unverified Token**")
+        metadata = pool_data.get('metadata', {})
+        pool_name = metadata.get('name', pool_data.get('name', 'Unknown'))
+        description = metadata.get('description', pool_data.get('description', ''))
 
-                response.append(f"**Total Supply:** {total_supply:,}")
-                response.append(f"**Holders:** {holders_count:,}")
-                response.append(f"**Decimals:** {token_info.get('decimals', 9)}")
+        formatted_pool = {
+            "address": pool_data.get('address', pool_address),
+            "name": pool_name,
+            "description": description,
+            "implementation": pool_data.get('implementation', ''),
+            "apy": pool_data.get('apy', 0),
+            "min_stake": min_stake_ton,
+            "total_amount": total_amount_ton,
+            "current_nominators": current_nominators,
+            "max_nominators": pool_data.get('max_nominators', 0),
+            "verified": pool_data.get('verified', False),
+            "cycle_start": pool_data.get('cycle_start', 0),
+            "cycle_end": pool_data.get('cycle_end', 0),
+            "profit_per_month": profit_per_month_ton,
+            "average_stake": average_stake_ton,
+            "metadata": metadata
+        }
 
-                description = token_info.get('description', '')
-                if description:
-                    desc = description[:200] + "..." if len(description) > 200 else description
-                    response.append(f"\n**Description:** {desc}")
+        result = {
+            "success": True,
+            "pool_address": pool_address,
+            "pool_info": formatted_pool,
+            "raw_response": response_data,
+            "timestamp": datetime.now().isoformat()
+        }
 
-                social_links = token_info.get('social_links', [])
-                if social_links:
-                    response.append(f"\n**Social Links:**")
-                    for link in social_links[:3]:
-                        response.append(f"• {link}")
-
-                chat.append_assistant("\n".join(response))
-            else:
-                chat.append_assistant(f"❌ Failed to get token info: {data.get('error', 'Unknown error')}")
-
-        elif last_message.startswith('holders '):
-            parts = last_message.replace('holders ', '').strip().split()
-            if len(parts) >= 1:
-                jetton_address = parts[0]
-                limit = int(parts[1]) if len(parts) > 1 else 10
-
-                context = {
-                    'jetton_address': jetton_address,
-                    'limit': limit,
-                    'tonapi_component': tonapi_component
-                }
-
-                result = get_jetton_holders_skill(context)
-                data = result.value
-
-                if data.get('success'):
-                    holders = data.get('holders', [])
-                    top_percentage = data.get('top_holders_percentage', 0)
-
-                    response = [
-                        f"👥 **Jetton Holders**",
-                        f"**Token Address:** `{jetton_address[:15]}...`",
-                        f"**Total Holders:** {data.get('total_holders', 0)}",
-                        f"**Top {len(holders)} Holders Control:** {top_percentage:.1f}%",
-                        ""
-                    ]
-
-                    if holders:
-                        response.append("**Top Holders:**")
-                        for i, holder in enumerate(holders[:5], 1):
-                            address = holder.get('address', '')
-                            percentage = holder.get('percentage', 0)
-                            is_scam = holder.get('is_scam', False)
-                            status = "⚠️ SCAM" if is_scam else "✅ Valid"
-                            response.append(f"\n**#{i} {status}**")
-                            response.append(f"• Address: `{address[:15]}...`")
-                            response.append(f"• Share: {percentage:.2f}%")
-
-                    chat.append_assistant("\n".join(response))
-                else:
-                    chat.append_assistant(f"❌ Failed to get holders: {data.get('error', 'Unknown error')}")
-            else:
-                chat.append_assistant("❌ Invalid format. Usage: holders <address> [limit]")
-
-        elif last_message.startswith('nftcollection '):
-            collection_address = last_message.replace('nftcollection ', '').strip()
-            context = {
-                'collection_address': collection_address,
-                'tonapi_component': tonapi_component
-            }
-
-            result = get_nft_collection_skill(context)
-            data = result.value
-
-            if data.get('success'):
-                collection_info = data['info']
-                name = collection_info.get('name', 'Unknown')
-                items_count = collection_info.get('items_count', 0)
-                is_verified = collection_info.get('is_verified', False)
-                is_scam = collection_info.get('is_scam', False)
-
-                response = [
-                    f"🖼️ **NFT Collection**",
-                    f"**Name:** {name}",
-                    f"**Address:** `{collection_address[:15]}...`",
-                    f"**Items:** {items_count:,} NFTs"
-                ]
-
-                if is_verified:
-                    response.append("✅ **Verified Collection**")
-                elif is_scam:
-                    response.append("⚠️ **WARNING: Scam Collection**")
-                else:
-                    response.append("⚠️ **Unverified Collection**")
-
-                description = collection_info.get('description', '')
-                if description:
-                    desc = description[:200] + "..." if len(description) > 200 else description
-                    response.append(f"\n**Description:** {desc}")
-
-                marketplace = collection_info.get('marketplace', '')
-                if marketplace:
-                    response.append(f"**Marketplace:** {marketplace}")
-
-                royalty = collection_info.get('royalty', 0)
-                if royalty > 0:
-                    response.append(f"**Royalty:** {royalty}%")
-
-                owner = collection_info.get('owner_address', '')
-                if owner:
-                    response.append(f"**Owner:** `{owner[:15]}...`")
-
-                chat.append_assistant("\n".join(response))
-            else:
-                chat.append_assistant(f"❌ Failed to get NFT collection: {data.get('error', 'Unknown error')}")
-
-        elif last_message.startswith('nftitem '):
-            nft_address = last_message.replace('nftitem ', '').strip()
-            context = {
-                'nft_address': nft_address,
-                'tonapi_component': tonapi_component
-            }
-
-            result = get_nft_item_skill(context)
-            data = result.value
-
-            if data.get('success'):
-                nft_info = data['info']
-                name = nft_info.get('name', 'Unknown')
-                collection_name = nft_info.get('collection_name', '')
-                is_for_sale = nft_info.get('is_for_sale', False)
-                price = nft_info.get('price', 0)
-                price_token = nft_info.get('price_token', 'TON')
-
-                response = [
-                    f"🖼️ **NFT Item**",
-                    f"**Name:** {name}",
-                    f"**Address:** `{nft_address[:15]}...`"
-                ]
-
-                if collection_name:
-                    response.append(f"**Collection:** {collection_name}")
-
-                if is_for_sale:
-                    response.append(f"💰 **For Sale:** {price:.2f} {price_token}")
-                else:
-                    response.append("📭 **Not for Sale**")
-
-                owner = nft_info.get('owner_address', '')
-                if owner:
-                    response.append(f"**Owner:** `{owner[:15]}...`")
-
-                description = nft_info.get('description', '')
-                if description:
-                    desc = description[:200] + "..." if len(description) > 200 else description
-                    response.append(f"\n**Description:** {desc}")
-
-                attributes = nft_info.get('attributes', [])
-                if attributes:
-                    response.append(f"\n**Attributes:**")
-                    for attr in attributes[:3]:
-                        trait = attr.get('trait_type', '')
-                        value = attr.get('value', '')
-                        if trait and value:
-                            response.append(f"• {trait}: {value}")
-
-                chat.append_assistant("\n".join(response))
-            else:
-                chat.append_assistant(f"❌ Failed to get NFT item: {data.get('error', 'Unknown error')}")
-
-        elif last_message == 'help':
-            chat.append_assistant(
-                "⚡ **TON API - The Open Network**\n\n"
-                "**Available Commands:**\n"
-                "• `price [currencies]` - Get TON price\n"
-                "• `balance <address>` - Get wallet balance\n"
-                "• `transactions <address> [limit]` - Get wallet transactions\n"
-                "• `token <address>` - Get token information\n"
-                "• `holders <address> [limit]` - Get jetton holders\n"
-                "• `nftcollection <address>` - Get NFT collection info\n"
-                "• `nftitem <address>` - Get NFT item info\n"
-                "• `marketplace [name]` - Get marketplace stats\n"
-                "• `help` - Show this help message\n\n"
-                "**Examples:**\n"
-                "• price USD,EUR,RUB\n"
-                "• balance EQDR4ne9zGk9dM...\n"
-                "• transactions EQDR4ne9zGk9dM... 20\n"
-                "• token EQB-MPw...\n"
-                "• holders EQB-MPw... 15\n"
-                "• nftcollection EQB-MPw...\n"
-                "• nftitem EQB-MPw...\n"
-                "• marketplace getgems\n"
-                "• help"
-            )
-
+        if formatted_pool['total_amount'] > 0:
+            print(f"✅ Staking pool info retrieved")
+            print(f"   Name: {formatted_pool['name']}")
+            print(f"   APY: {formatted_pool['apy']:.2f}%")
+            print(f"   Min Stake: {formatted_pool['min_stake']:,.2f} TON")
+            print(f"   Total Staked: {formatted_pool['total_amount']:,.2f} TON")
+            print(f"   Nominators: {formatted_pool['current_nominators']:,}/{formatted_pool['max_nominators']:,}")
         else:
-            chat.append_assistant(
-                "🤔 I didn't understand that command.\n\n"
-                "**Available commands:**\n"
-                "• `price [currencies]` - Get TON price\n"
-                "• `balance <address>` - Get wallet balance\n"
-                "• `transactions <address> [limit]` - Get wallet transactions\n"
-                "• `token <address>` - Get token information\n"
-                "• `holders <address> [limit]` - Get jetton holders\n"
-                "• `nftcollection <address>` - Get NFT collection info\n"
-                "• `nftitem <address>` - Get NFT item info\n"
-                "• `marketplace [name]` - Get marketplace stats\n"
-                "• `help` - Show help\n\n"
-                "Type `help` for more information."
-            )
+            print(f"⚠️  Pool data may be incomplete or pool is inactive")
+
+        return TONStakingValue(result)
 
     except Exception as e:
-        print(f"❌ Error in tonapi_chat_skill: {e}")
         import traceback
         traceback.print_exc()
-        chat.append_assistant("❌ An error occurred while processing your request")
+        result = {"error": f"Failed to get staking pool info: {str(e)}"}
+        return TONStakingValue(result)
 
-    return chat
+def get_account_nominators_pools_skill(context: Dict[str, Any]) -> TONStakingValue:
+    print("🔧 Starting get_account_nominators_pools_skill...")
+
+    account_id = context.get('account_id')
+
+    if not account_id:
+        result = {"error": "No account ID provided"}
+        return TONStakingValue(result)
+
+    try:
+        tonapi_component = context.get('tonapi_component')
+        if not tonapi_component:
+            result = {"error": "TON API component not available"}
+            return TONStakingValue(result)
+
+        print(f"🏦 Getting nominator pools for account: {account_id}")
+
+        pools_data = tonapi_component.get_account_nominators_pools(account_id)
+
+        if not pools_data:
+            result = {"error": f"API returned None for account {account_id}"}
+            return TONStakingValue(result)
+
+        pools = pools_data.get('pools', [])
+
+        if not pools:
+            result = {
+                "success": True,
+                "account_id": account_id,
+                "pools": [],
+                "total_pools": 0,
+                "total_staked": 0,
+                "timestamp": datetime.now().isoformat()
+            }
+            return TONStakingValue(result)
+
+        formatted_pools = []
+        total_staked_nano = 0
+
+        for pool_info in pools:
+            pool_address = pool_info.get('pool', '')
+            amount_nano = pool_info.get('amount', 0)
+            pending_deposit_nano = pool_info.get('pending_deposit', 0)
+            pending_withdraw_nano = pool_info.get('pending_withdraw', 0)
+            ready_withdraw_nano = pool_info.get('ready_withdraw', 0)
+
+            amount_ton = amount_nano / 1_000_000_000
+            pending_deposit_ton = pending_deposit_nano / 1_000_000_000
+            pending_withdraw_ton = pending_withdraw_nano / 1_000_000_000
+            ready_withdraw_ton = ready_withdraw_nano / 1_000_000_000
+
+            total_staked_nano += amount_nano
+
+            formatted_pool = {
+                "pool_address": pool_address,
+                "amount": amount_ton,
+                "amount_nano": amount_nano,
+                "pending_deposit": pending_deposit_ton,
+                "pending_deposit_nano": pending_deposit_nano,
+                "pending_withdraw": pending_withdraw_ton,
+                "pending_withdraw_nano": pending_withdraw_nano,
+                "ready_withdraw": ready_withdraw_ton,
+                "ready_withdraw_nano": ready_withdraw_nano,
+                "total": amount_ton + pending_deposit_ton - pending_withdraw_ton
+            }
+
+            formatted_pools.append(formatted_pool)
+
+        total_staked_ton = total_staked_nano / 1_000_000_000
+
+        result = {
+            "success": True,
+            "account_id": account_id,
+            "pools": formatted_pools,
+            "total_pools": len(formatted_pools),
+            "total_staked": total_staked_ton,
+            "total_staked_nano": total_staked_nano,
+            "timestamp": datetime.now().isoformat()
+        }
+
+        print(f"✅ Retrieved {len(formatted_pools)} nominator pools")
+        if formatted_pools:
+            print(f"   Total staked: {total_staked_ton:,.2f} TON")
+            for i, pool in enumerate(formatted_pools[:3]):
+                print(f"   Pool {i+1}: {pool['pool_address']} - {pool['amount']:,.2f} TON")
+            if len(formatted_pools) > 3:
+                print(f"   ... and {len(formatted_pools) - 3} more pools")
+
+        return TONStakingValue(result)
+
+    except Exception as e:
+        print(f"❌ Error in get_account_nominators_pools_skill: {e}")
+        result = {"error": f"Failed to get nominator pools: {str(e)}"}
+        return TONStakingValue(result)
