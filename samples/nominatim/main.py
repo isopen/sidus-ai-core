@@ -19,9 +19,9 @@ def main():
     if result.get('success'):
         server_info = result.get('server_info', {})
         print(f"✅ Nominatim Server Status: {server_info.get('message', 'Unknown')}")
-        print(f"   Software Version: {server_info.get('software_version', 'N/A')}")
-        print(f"   Database Version: {server_info.get('database_version', 'N/A')}")
-        print(f"   Data Updated: {server_info.get('data_updated', 'N/A')}")
+        print(f"   Software Version: {server_info.get('software_version', 'Not Available')}")
+        print(f"   Database Version: {server_info.get('database_version', 'Not Available')}")
+        print(f"   Data Updated: {server_info.get('data_updated', 'Not Available')}")
     else:
         print(f"❌ Error: {result.get('error')}")
 
@@ -41,10 +41,10 @@ def main():
         print(f"✅ Found {result.get('places_count')} places")
         print(f"   Format: JSONv2")
 
-        places = result.get('places', [])[:3]
-        print(f"\n   Top 3 results:")
-        for i, place in enumerate(places, 1):
-            print(f"   {i}. {place['display_name'][:80]}...")
+        places = result.get('places', [])
+        print(f"\n   All results:")
+        for i, place in enumerate(places):
+            print(f"   {i + 1}. {place['display_name']}")
             print(f"      Type: {place['type']}, Importance: {place['importance']:.3f}")
             if 'extratags' in place:
                 print(f"      Extratags: {len(place['extratags'])} items")
@@ -67,7 +67,7 @@ def main():
     if result.get('success'):
         place = result.get('place', {})
         print(f"✅ Reverse geocode successful")
-        print(f"   Location: {place.get('display_name', 'Unknown')[:100]}...")
+        print(f"   Location: {place.get('display_name', 'Unknown')}")
         print(f"   Type: {place.get('type', 'Unknown')}")
         print(f"   Has polygon data: {'✅ Yes' if 'polygonpoints' in place else '❌ No'}")
 
@@ -89,12 +89,12 @@ def main():
 
         places_sample = result.get('places_sample', [])
         if places_sample:
-            print(f"\n   Sample results with extratags:")
-            for i, place in enumerate(places_sample, 1):
-                print(f"   {i}. {place.get('display_name', 'Unknown')[:80]}...")
+            print(f"\n   All results with extratags:")
+            for i, place in enumerate(places_sample):
+                print(f"   {i + 1}. {place.get('display_name', 'Unknown')}")
                 if place.get('extratags'):
-                    extratags = list(place['extratags'].keys())[:3]
-                    print(f"      Extratags: {', '.join(extratags)}...")
+                    all_extratags = list(place['extratags'].keys())
+                    print(f"      All Extratags: {', '.join(all_extratags)}")
     else:
         print(f"❌ Error: {result.get('error')}")
 
@@ -112,7 +112,7 @@ def main():
         print(f"   Format: {result.get('format')}")
 
         metadata = result.get('metadata', {})
-        print(f"   Licence: {metadata.get('licence', 'N/A')}")
+        print(f"   Licence: {metadata.get('licence', 'Not Available')}")
     else:
         print(f"❌ Error: {result.get('error')}")
 
@@ -131,10 +131,10 @@ def main():
 
     if result.get('success'):
         print(f"✅ Found {result.get('places_count')} places in Paris viewbox")
-        places = result.get('places', [])[:3]
-        print(f"\n   Top results:")
-        for i, place in enumerate(places, 1):
-            print(f"   {i}. {place['display_name'][:80]}...")
+        places = result.get('places', [])
+        print(f"\n   All results:")
+        for i, place in enumerate(places):
+            print(f"   {i + 1}. {place['display_name']}")
             print(f"      Coordinates: {place['lat']}, {place['lon']}")
     else:
         print(f"❌ Error: {result.get('error')}")
@@ -215,10 +215,10 @@ def main():
         print(f"✅ Search with French language preference")
         print(f"   Found {result.get('places_count')} places")
 
-        places = result.get('places', [])[:2]
-        print(f"\n   Results with French display:")
-        for i, place in enumerate(places, 1):
-            print(f"   {i}. {place['display_name'][:100]}...")
+        places = result.get('places', [])
+        print(f"\n   All results with French display:")
+        for i, place in enumerate(places):
+            print(f"   {i + 1}. {place['display_name']}")
     else:
         print(f"❌ Error: {result.get('error')}")
 
@@ -236,10 +236,10 @@ def main():
         print(f"✅ Search for bakeries in Berlin")
         print(f"   Found {result.get('places_count')} places")
 
-        places = result.get('places', [])[:2]
-        print(f"\n   Bakery results:")
-        for i, place in enumerate(places, 1):
-            print(f"   {i}. {place.get('display_name', 'Unknown')[:80]}...")
+        places = result.get('places', [])
+        print(f"\n   All bakery results:")
+        for i, place in enumerate(places):
+            print(f"   {i + 1}. {place.get('display_name', 'Unknown')}")
             address = place.get('address', {})
             if 'shop' in address:
                 print(f"      Shop type: {address['shop']}")
@@ -290,10 +290,10 @@ def main():
         print(f"✅ Search with address type filter (road)")
         print(f"   Found {result.get('places_count')} places")
 
-        places = result.get('places', [])[:2]
-        print(f"\n   Road results:")
-        for i, place in enumerate(places, 1):
-            print(f"   {i}. {place.get('display_name', 'Unknown')[:80]}...")
+        places = result.get('places', [])
+        print(f"\n   All road results:")
+        for i, place in enumerate(places):
+            print(f"   {i + 1}. {place.get('display_name', 'Unknown')}")
             if 'addresstype' in place:
                 print(f"      Address type: {place['addresstype']}")
     else:
@@ -315,18 +315,18 @@ def main():
 
         geocoding_info = result.get('geocoding_info', {})
         if geocoding_info:
-            print(f"   Attribution: {geocoding_info.get('attribution', 'N/A')}")
-            print(f"   Licence: {geocoding_info.get('licence', 'N/A')}")
+            print(f"   Attribution: {geocoding_info.get('attribution', 'Not Available')}")
+            print(f"   Licence: {geocoding_info.get('licence', 'Not Available')}")
 
         features_sample = result.get('features_sample', [])
         if features_sample:
-            print(f"\n   Sample features:")
-            for i, feature in enumerate(features_sample, 1):
+            print(f"\n   All sample features:")
+            for i, feature in enumerate(features_sample):
                 if isinstance(feature, dict):
                     props = feature.get('properties', {})
                     geocoding_props = props.get('geocoding', {})
                     label = geocoding_props.get('label', 'No label')
-                    print(f"   {i}. {label[:80]}...")
+                    print(f"   {i + 1}. {label}")
     else:
         print(f"❌ Error: {result.get('error')}")
 

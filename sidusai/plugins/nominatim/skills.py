@@ -82,7 +82,7 @@ def search_location_skill(context: Dict[str, Any]) -> NominatimDataValue:
                     "timestamp": datetime.now().isoformat()
                 }
 
-                for place in places[:100]:
+                for place in places:
                     place_type = place.get('type', 'unknown')
                     osm_type = place.get('osm_type', 'unknown')
                     display_name = place.get('display_name', '')
@@ -139,9 +139,9 @@ def search_location_skill(context: Dict[str, Any]) -> NominatimDataValue:
                 print(f"   Countries: {len(analysis_result['summary']['countries'])}")
 
                 if analysis_result["places"]:
-                    print(f"\nTop 3 results:")
-                    for i, place in enumerate(analysis_result["places"][:3]):
-                        print(f"   {i+1}. {place['display_name'][:80]}...")
+                    print(f"\nAll results:")
+                    for i, place in enumerate(analysis_result["places"]):
+                        print(f"   {i+1}. {place['display_name']}")
 
             else:
                 analysis_result = {
@@ -275,7 +275,7 @@ def reverse_geocode_skill(context: Dict[str, Any]) -> NominatimDataValue:
 
                     print(f"✅ Reverse geocode: Found location for coordinates ({lat}, {lon})")
                     print(f"   Format: {format_type}")
-                    print(f"   Display name: {analysis_result['place']['display_name'][:100]}...")
+                    print(f"   Display name: {analysis_result['place']['display_name']}")
 
                 else:
                     analysis_result = {
@@ -401,9 +401,9 @@ def lookup_osm_skill(context: Dict[str, Any]) -> NominatimDataValue:
                 print(f"   Format: {format_type}")
 
                 if analysis_result["places"]:
-                    print(f"\nLookup results:")
-                    for i, place in enumerate(analysis_result["places"][:3]):
-                        print(f"   {i+1}. {place['display_name'][:80]}...")
+                    print(f"\nAll lookup results:")
+                    for i, place in enumerate(analysis_result["places"]):
+                        print(f"   {i+1}. {place['display_name']}")
 
             else:
                 analysis_result = {
@@ -640,7 +640,7 @@ def get_deletable_skill(context: Dict[str, Any]) -> NominatimDataValue:
                 analysis_result = {
                     "success": True,
                     "deletable_count": len(deletable_items),
-                    "deletable_items": deletable_items[:50],
+                    "deletable_items": deletable_items,
                     "summary": {
                         "osm_types": {},
                         "reasons": {},
@@ -720,7 +720,7 @@ def get_polygons_skill(context: Dict[str, Any]) -> NominatimDataValue:
                 analysis_result = {
                     "success": True,
                     "broken_polygons_count": len(polygons),
-                    "polygons": polygons[:20],
+                    "polygons": polygons,
                     "summary": {
                         "osm_types": {},
                         "error_types": {},
@@ -882,7 +882,7 @@ def reverse_with_polygon_skill(context: Dict[str, Any]) -> NominatimDataValue:
                 "coordinates": {"lat": lat, "lon": lon},
                 "polygon_format": polygon_format,
                 "response_format": format_type,
-                "response_sample": str(response)[:500],
+                "response_sample": str(response),
                 "timestamp": datetime.now().isoformat()
             }
 
@@ -941,7 +941,7 @@ def search_geojson_skill(context: Dict[str, Any]) -> NominatimDataValue:
 
                 analysis_result.update({
                     "features_count": len(features),
-                    "features_sample": features[:3] if features else [],
+                    "features_sample": features,
                     "type": response.get('type', 'Unknown'),
                     "licence": response.get('licence', 'Unknown')
                 })
@@ -950,15 +950,15 @@ def search_geojson_skill(context: Dict[str, Any]) -> NominatimDataValue:
                 print(f"   Format: GeoJSON")
 
                 if features:
-                    print(f"\n   Sample features:")
-                    for i, feature in enumerate(features[:2], 1):
+                    print(f"\nAll features:")
+                    for i, feature in enumerate(features):
                         props = feature.get('properties', {})
-                        print(f"   {i}. {props.get('display_name', 'Unknown')[:80]}...")
+                        print(f"   {i+1}. {props.get('display_name', 'Unknown')}")
 
             elif isinstance(response, list):
                 analysis_result.update({
                     "features_count": len(response),
-                    "features_sample": response[:3] if response else [],
+                    "features_sample": response,
                     "response_type": "list"
                 })
 
@@ -966,7 +966,7 @@ def search_geojson_skill(context: Dict[str, Any]) -> NominatimDataValue:
 
             else:
                 analysis_result.update({
-                    "response_raw": str(response)[:500],
+                    "response_raw": str(response),
                     "response_type": type(response).__name__
                 })
 
@@ -1025,7 +1025,7 @@ def reverse_geojson_skill(context: Dict[str, Any]) -> NominatimDataValue:
                     "format": "geojson",
                     "coordinates": {"lat": lat, "lon": lon, "zoom": zoom},
                     "features_count": len(features),
-                    "features_sample": features[:1],
+                    "features_sample": features,
                     "metadata": {
                         "licence": response.get('licence')
                     },
@@ -1096,7 +1096,7 @@ def search_geocodejson_skill(context: Dict[str, Any]) -> NominatimDataValue:
 
                 analysis_result.update({
                     "features_count": len(features),
-                    "features_sample": features[:3] if features else [],
+                    "features_sample": features,
                     "geocoding_info": geocoding,
                     "type": response.get('type', 'Unknown'),
                     "licence": response.get('licence', 'Unknown')
@@ -1107,16 +1107,16 @@ def search_geocodejson_skill(context: Dict[str, Any]) -> NominatimDataValue:
                 print(f"   Response type: {response.get('type', 'Unknown')}")
 
                 if features:
-                    print(f"\n   Sample features:")
-                    for i, feature in enumerate(features[:2], 1):
+                    print(f"\nAll features:")
+                    for i, feature in enumerate(features):
                         props = feature.get('properties', {})
                         geocoding_props = props.get('geocoding', {})
-                        print(f"   {i}. {geocoding_props.get('label', 'Unknown')[:80]}...")
+                        print(f"   {i+1}. {geocoding_props.get('label', 'Unknown')}")
 
             elif isinstance(response, list):
                 analysis_result.update({
                     "features_count": len(response),
-                    "features_sample": response[:3] if response else [],
+                    "features_sample": response,
                     "response_type": "list"
                 })
 
@@ -1125,7 +1125,7 @@ def search_geocodejson_skill(context: Dict[str, Any]) -> NominatimDataValue:
 
             else:
                 analysis_result.update({
-                    "response_raw": str(response)[:500],
+                    "response_raw": str(response),
                     "response_type": type(response).__name__
                 })
 
@@ -1247,7 +1247,7 @@ def search_jsonv2_skill(context: Dict[str, Any]) -> NominatimDataValue:
                     "success": True,
                     "format": "jsonv2",
                     "places_count": len(places),
-                    "places_sample": places[:3],
+                    "places_sample": places,
                     "summary": {
                         "addresstypes": {},
                         "categories": {}
@@ -1255,7 +1255,7 @@ def search_jsonv2_skill(context: Dict[str, Any]) -> NominatimDataValue:
                     "timestamp": datetime.now().isoformat()
                 }
 
-                for place in places[:10]:
+                for place in places:
                     addresstype = place.get('addresstype', 'unknown')
                     category = place.get('category', 'unknown')
 
@@ -1334,7 +1334,7 @@ def reverse_jsonv2_skill(context: Dict[str, Any]) -> NominatimDataValue:
                 print(f"✅ JSONv2 reverse: Processed coordinates ({lat}, {lon})")
                 print(f"   Format: JSONv2")
                 if response.get('display_name'):
-                    print(f"   Display name: {response['display_name'][:100]}...")
+                    print(f"   Display name: {response['display_name']}")
 
             else:
                 analysis_result = {
@@ -1388,7 +1388,7 @@ def search_xml_skill(context: Dict[str, Any]) -> NominatimDataValue:
                 "success": True,
                 "format": "xml",
                 "query": query,
-                "response_sample": str(response)[:500],
+                "response_sample": str(response),
                 "timestamp": datetime.now().isoformat()
             }
 
@@ -1444,7 +1444,7 @@ def reverse_xml_skill(context: Dict[str, Any]) -> NominatimDataValue:
                 "success": True,
                 "format": "xml",
                 "coordinates": {"lat": lat, "lon": lon, "zoom": zoom},
-                "response_sample": str(response)[:500],
+                "response_sample": str(response),
                 "timestamp": datetime.now().isoformat()
             }
 
@@ -1501,7 +1501,7 @@ def lookup_with_extratags_skill(context: Dict[str, Any]) -> NominatimDataValue:
                     "extratags_enabled": True,
                     "places_count": len(places),
                     "places_with_extratags": 0,
-                    "places_sample": places[:3],
+                    "places_sample": places,
                     "timestamp": datetime.now().isoformat()
                 }
 
