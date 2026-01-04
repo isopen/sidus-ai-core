@@ -203,24 +203,38 @@ def main():
     print("\n10. Search with accept-language parameter:")
     print("-" * 30)
 
-    result = agent.search_location(
-        query="Paris, France",
-        limit=3,
-        addressdetails=1,
-        accept_language="fr",
-        format_type='jsonv2'
-    )
+    queries = [
+        {"query": "London", "language": "en", "expected_country": "United Kingdom"},
+        {"query": "Londres", "language": "es", "expected_country": "Reino Unido"},
+        {"query": "Londres", "language": "fr", "expected_country": "Royaume-Uni"},
+    ]
 
-    if result.get('success'):
-        print(f"✅ Search with French language preference")
-        print(f"   Found {result.get('places_count')} places")
+    for test in queries:
+        print(f"\nSearch for '{test['query']}' with language {test['language']}:")
 
-        places = result.get('places', [])
-        print(f"\n   All results with French display:")
-        for i, place in enumerate(places):
-            print(f"   {i + 1}. {place['display_name']}")
-    else:
-        print(f"❌ Error: {result.get('error')}")
+        result = agent.search_location(
+            query=test['query'],
+            limit=2,
+            addressdetails=1,
+            accept_language=test['language'],
+            format_type='jsonv2'
+        )
+
+        if result.get('success'):
+            places = result.get('places', [])
+            if places:
+                first_place = places[0]
+                address = first_place.get('address', {})
+                country = address.get('country', 'Not defined')
+
+                print(f"   ✅ Found: {len(places)} places")
+                print(f"   Country (in locale {test['language']}): {country}")
+                print(f"   Expected: {test['expected_country']}")
+                print(f"   Match: {'✅ Yes' if country == test['expected_country'] else '❌ No'}")
+
+                print(f"   Full name: {first_place['display_name']}")
+        else:
+            print(f"   ❌ Error: {result.get('error')}")
 
     print("\n11. Search without layer filtering:")
     print("-" * 30)
