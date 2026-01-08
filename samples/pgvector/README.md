@@ -1,6 +1,5 @@
 ### PgVector Integration Sample
 
-Overview
 The PgVector plugin provides PostgreSQL vector database capabilities for AI agents. It enables efficient storage, indexing, and similarity search of high-dimensional vectors (embeddings) using PostgreSQL with the pgvector extension.
 
 Key Features:
